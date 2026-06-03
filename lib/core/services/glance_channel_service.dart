@@ -1,0 +1,255 @@
+import 'package:flutter/services.dart';
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// Glance — MethodChannel Service
+/// ─────────────────────────────────────────────────────────────────────────────
+/// Bridge between Flutter UI and Native Android (Kotlin) Foreground Service.
+///
+/// This class encapsulates all platform channel communication:
+///   • startService    — Start the GlanceOverlayService
+///   • stopService     — Stop the service & remove overlay
+///   • calibrate       — Save current device orientation as baseline (β₀, γ₀)
+///   • setSensitivity  — Adjust the maxTolerance angle (in degrees)
+///   • setOverlayMode  — Switch between fullscreen and targeted overlay
+///   • setTargetedArea — Send target area coordinates to native overlay
+///
+/// Pixel Conversion Strategy (Logical → Physical):
+///   Flutter operates in logical pixels (dp), but Android's WindowManager
+///   uses physical pixels (px). This service handles the conversion:
+///
+///     physicalPx = logicalPx × devicePixelRatio
+///
+///   The [setTargetedArea] method accepts logical pixel coordinates from
+///   Flutter widgets and automatically converts them to physical pixels
+///   before sending to the native side via MethodChannel.
+///
+///   The caller must provide [devicePixelRatio] and [statusBarHeight]
+///   (both from MediaQuery) so the conversion is accurate across all
+///   device densities (mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi).
+/// ─────────────────────────────────────────────────────────────────────────────
+class GlanceChannelService {
+  /// Single shared channel matching the native side's registration.
+  static const _channel = MethodChannel('com.glanceapp.glance/overlay');
+
+  /// EventChannel for real-time sensor data streaming from native service.
+  /// Receives Map events with keys "beta" (pitch) and "gamma" (roll) in degrees.
+  static const _sensorChannel = EventChannel(
+    'com.glanceapp.glance/sensor_stream',
+  );
+
+  /// Cached broadcast stream to avoid creating multiple subscriptions.
+  /// Using a static field ensures only ONE native listener is created,
+  /// even if multiple StreamBuilder widgets subscribe simultaneously.
+  static Stream<Map<String, double>>? _sensorStreamCache;
+
+  /// Returns a broadcast stream of real-time sensor data from the native
+  /// GlanceOverlayService.
+  ///
+  /// Each event is a `Map<String, double>` containing:
+  ///   - `"beta"`  — pitch angle in degrees (front/back tilt)
+  ///   - `"gamma"` — roll angle in degrees (left/right tilt)
+  ///
+  /// The stream is throttled to ~10 Hz on the native side (100ms interval)
+  /// for battery efficiency while remaining smooth for UI progress bars.
+  ///
+  /// Usage with StreamBuilder:
+  /// ```dart
+  /// StreamBuilder<Map<String, double>>(
+  ///   stream: GlanceChannelService.sensorStream,
+  ///   builder: (context, snapshot) {
+  ///     final beta = snapshot.data?['beta'] ?? 0.0;
+  ///     final gamma = snapshot.data?['gamma'] ?? 0.0;
+  ///     // ...
+  ///   },
+  /// )
+  /// ```
+  static Stream<Map<String, double>> get sensorStream {
+    _sensorStreamCache ??= _sensorChannel
+        .receiveBroadcastStream()
+        .map((event) {
+          if (event is Map) {
+            return {
+              'beta': (event['beta'] as num?)?.toDouble() ?? 0.0,
+              'gamma': (event['gamma'] as num?)?.toDouble() ?? 0.0,
+            };
+          }
+          return {'beta': 0.0, 'gamma': 0.0};
+        })
+        .handleError((error) {
+          // Graceful degradation — return zeroes if native stream errors
+          return {'beta': 0.0, 'gamma': 0.0};
+        })
+        .asBroadcastStream();
+    return _sensorStreamCache!;
+  }
+
+  /// Starts the native GlanceOverlayService foreground service.
+  /// Returns `true` if started successfully.
+  Future<bool> startService() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('startService');
+      return result ?? false;
+    } on MissingPluginException {
+      // Native side not yet implemented — expected during UI-only development.
+      return false;
+    } on PlatformException catch (e) {
+      // Platform-specific error — preserve the error code for UI handling.
+      // Kotlin side sends 'PERMISSION_DENIED' when overlay permission is denied.
+      throw GlanceServiceException(
+        e.code == 'PERMISSION_DENIED'
+            ? 'PERMISSION_DENIED: ${e.message}'
+            : 'Failed to start service: ${e.message}',
+      );
+    }
+  }
+
+  /// Stops the native GlanceOverlayService and removes the overlay.
+  /// Returns `true` if stopped successfully.
+  Future<bool> stopService() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('stopService');
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      throw GlanceServiceException('Failed to stop service: ${e.message}');
+    }
+  }
+
+  /// Tells the native service to capture the current device orientation
+  /// as the baseline angles (pitch β₀ and roll γ₀).
+  Future<bool> calibrate() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('calibrate');
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      throw GlanceServiceException('Calibration failed: ${e.message}');
+    }
+  }
+
+  /// Sends the sensitivity value (0.0 – 1.0) to the native service.
+  ///
+  /// This maps to `maxTolerance` in the deviation formula:
+  ///   opacity = (deviation / maxTolerance)²
+  ///
+  /// Lower sensitivity → higher tolerance (more tilt allowed).
+  /// Higher sensitivity → lower tolerance (reacts to slight tilts).
+  Future<bool> setSensitivity(double value) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'setSensitivity',
+        {'value': value},
+      );
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      throw GlanceServiceException(
+        'Failed to set sensitivity: ${e.message}',
+      );
+    }
+  }
+
+  /// Switches the overlay mode between fullscreen and targeted.
+  ///
+  /// [mode] must be either `"fullscreen"` or `"targeted"`.
+  ///
+  /// In fullscreen mode, the overlay covers the entire screen (default).
+  /// In targeted mode, the overlay covers only the area defined by
+  /// [setTargetedArea].
+  Future<bool> setOverlayMode(String mode) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'setOverlayMode',
+        {'mode': mode},
+      );
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      throw GlanceServiceException(
+        'Failed to set overlay mode: ${e.message}',
+      );
+    }
+  }
+
+  /// Sends the targeted area coordinates to the native overlay service.
+  ///
+  /// **Pixel Conversion (Critical):**
+  ///
+  /// Flutter widgets report positions in LOGICAL PIXELS (device-independent).
+  /// Android's WindowManager expects PHYSICAL PIXELS (actual screen pixels).
+  ///
+  /// This method performs the conversion automatically:
+  ///   ```
+  ///   physicalX      = logicalX × devicePixelRatio
+  ///   physicalY      = (logicalY + statusBarHeight) × devicePixelRatio
+  ///   physicalWidth  = logicalWidth  × devicePixelRatio
+  ///   physicalHeight = logicalHeight × devicePixelRatio
+  ///   ```
+  ///
+  /// **Why statusBarHeight is added to Y:**
+  ///   Flutter's coordinate system (inside SafeArea) starts BELOW the
+  ///   status bar. But WindowManager's coordinate system starts from
+  ///   the absolute top-left of the screen (including the status bar).
+  ///   Adding statusBarHeight compensates for this offset.
+  ///
+  /// Parameters (all in LOGICAL PIXELS from Flutter):
+  ///   [logicalX]      — Left edge of the target area
+  ///   [logicalY]      — Top edge of the target area (relative to SafeArea)
+  ///   [logicalWidth]  — Width of the target area
+  ///   [logicalHeight] — Height of the target area
+  ///   [devicePixelRatio] — From `MediaQuery.of(context).devicePixelRatio`
+  ///   [statusBarHeight]  — From `MediaQuery.of(context).padding.top`
+  ///                        (in logical pixels, will be converted)
+  Future<bool> setTargetedArea({
+    required double logicalX,
+    required double logicalY,
+    required double logicalWidth,
+    required double logicalHeight,
+    required double devicePixelRatio,
+    required double statusBarHeight,
+  }) async {
+    // ── Convert logical pixels → physical pixels ──────────────────────
+    // Round to int because WindowManager.LayoutParams uses int pixels.
+    //
+    // Y-axis adjustment: Flutter SafeArea starts below the status bar,
+    // but WindowManager starts from the absolute screen top.
+    // Adding statusBarHeight aligns both coordinate systems.
+    final int physicalX = (logicalX * devicePixelRatio).round();
+    final int physicalY =
+        ((logicalY + statusBarHeight) * devicePixelRatio).round();
+    final int physicalWidth = (logicalWidth * devicePixelRatio).round();
+    final int physicalHeight = (logicalHeight * devicePixelRatio).round();
+
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'setTargetedArea',
+        {
+          'x': physicalX,
+          'y': physicalY,
+          'width': physicalWidth,
+          'height': physicalHeight,
+        },
+      );
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      throw GlanceServiceException(
+        'Failed to set targeted area: ${e.message}',
+      );
+    }
+  }
+}
+
+/// Custom exception for Glance service errors.
+class GlanceServiceException implements Exception {
+  final String message;
+  const GlanceServiceException(this.message);
+
+  @override
+  String toString() => 'GlanceServiceException: $message';
+}
