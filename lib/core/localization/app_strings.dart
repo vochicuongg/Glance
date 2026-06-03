@@ -108,6 +108,10 @@ class LocalizedStrings {
   final String sensorFrontBack;
   final String sensorLeftRight;
 
+  // ── Notification (Native Service) ───────────────────────────────────
+  final String notificationTitle;
+  final String notificationText;
+
   const LocalizedStrings({
     required this.protectionActive,
     required this.protectionDisabled,
@@ -149,6 +153,8 @@ class LocalizedStrings {
     required this.settings,
     required this.sensorFrontBack,
     required this.sensorLeftRight,
+    required this.notificationTitle,
+    required this.notificationText,
   });
 }
 
@@ -228,6 +234,10 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     settings: 'Settings',
     sensorFrontBack: 'Front / Back (Beta)',
     sensorLeftRight: 'Left / Right (Gamma)',
+
+    // Notification (Native Service)
+    notificationTitle: 'Glance Active',
+    notificationText: 'Your screen is being protected',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -299,6 +309,10 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     settings: 'Cài đặt',
     sensorFrontBack: 'Trước / Sau (Beta)',
     sensorLeftRight: 'Trái / Phải (Gamma)',
+
+    // Thông báo (Dịch vụ gốc)
+    notificationTitle: 'Glance đang hoạt động',
+    notificationText: 'Màn hình của bạn đang được bảo vệ',
   ),
 };
 

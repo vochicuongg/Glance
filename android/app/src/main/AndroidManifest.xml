@@ -22,7 +22,8 @@
     <application
         android:label="Glance"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:resizeableActivity="true">
 
         <!-- ════════════════════════════════════════════════════════════════
              MAIN ACTIVITY (Flutter Host)
@@ -35,7 +36,12 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:resizeableActivity="true">
+            <!-- Samsung Z Flip5 Cover Screen: allow showWhenLocked -->
+            <meta-data
+                android:name="com.samsung.android.activity.showWhenLocked"
+                android:value="true" />
             <!-- TransparentTheme makes the Activity window translucent so
                  the TargetedAreaEditor can "see through" to the home screen
                  via a cut-out hole in the ScrimPainter overlay.
@@ -61,6 +67,22 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
+
+        <!-- ════════════════════════════════════════════════════════════════
+             QUICK SETTINGS TILE SERVICE
+             Adds a toggle tile in Android's Quick Settings panel to
+             start/stop the GlanceOverlayService without opening the app.
+             ════════════════════════════════════════════════════════════════ -->
+        <service
+            android:name=".GlanceTileService"
+            android:label="Glance"
+            android:icon="@mipmap/ic_launcher"
+            android:exported="true"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- Flutter embedding meta-data -->
         <meta-data

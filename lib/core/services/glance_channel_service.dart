@@ -63,6 +63,16 @@ class GlanceChannelService {
   ///   },
   /// )
   /// ```
+  /// Resets the cached sensor broadcast stream so the next access to
+  /// [sensorStream] creates a fresh subscription to the native EventChannel.
+  ///
+  /// This is needed when the app is restarted while the service is already
+  /// running — the old broadcast stream may be stale and won't deliver
+  /// new events until re-subscribed.
+  static void resetSensorStreamCache() {
+    _sensorStreamCache = null;
+  }
+
   static Stream<Map<String, double>> get sensorStream {
     _sensorStreamCache ??= _sensorChannel
         .receiveBroadcastStream()
@@ -83,11 +93,38 @@ class GlanceChannelService {
     return _sensorStreamCache!;
   }
 
-  /// Starts the native GlanceOverlayService foreground service.
-  /// Returns `true` if started successfully.
-  Future<bool> startService() async {
+  /// Queries the native side to check if GlanceOverlayService is currently running.
+  ///
+  /// Used on app restart to sync Flutter UI state with the native service state.
+  /// Returns `true` if the service is running, `false` otherwise.
+  static Future<bool> isServiceRunning() async {
     try {
-      final result = await _channel.invokeMethod<bool>('startService');
+      final result = await _channel.invokeMethod<bool>('isServiceRunning');
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Starts the native GlanceOverlayService foreground service.
+  ///
+  /// Accepts optional [notificationTitle] and [notificationText] to display
+  /// the foreground notification in the user's current language.
+  /// These strings are passed from [AppStrings] so the notification
+  /// language stays in sync with the Flutter UI.
+  ///
+  /// Returns `true` if started successfully.
+  Future<bool> startService({
+    String? notificationTitle,
+    String? notificationText,
+  }) async {
+    try {
+      final Map<String, String> args = {};
+      if (notificationTitle != null) args['notificationTitle'] = notificationTitle;
+      if (notificationText != null) args['notificationText'] = notificationText;
+      final result = await _channel.invokeMethod<bool>('startService', args);
       return result ?? false;
     } on MissingPluginException {
       // Native side not yet implemented — expected during UI-only development.

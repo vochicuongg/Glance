@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/localization/app_strings.dart';
@@ -45,6 +47,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ── Service ─────────────────────────────────────────────────────────────
   final _channelService = GlanceChannelService();
 
+  // ── Lifecycle ───────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _syncServiceState();
+  }
+
+  /// Queries the native side to check if GlanceOverlayService is already
+  /// running (e.g. started via Quick Settings Tile before the app was opened).
+  ///
+  /// If the service IS running, we:
+  ///   1. Set [_isServiceActive] = true so the UI shows the active state.
+  ///   2. Force the sensor stream cache to refresh so [StreamBuilder] in
+  ///      [_buildSensorBars] immediately starts receiving beta/gamma data.
+  ///
+  /// The method is fire-and-forget from [initState] but uses [mounted]
+  /// guard to avoid calling [setState] after the widget is disposed.
+  Future<void> _syncServiceState() async {
+    try {
+      final isRunning = await GlanceChannelService.isServiceRunning();
+      if (!mounted) return;
+      if (isRunning) {
+        setState(() {
+          _isServiceActive = true;
+        });
+        // Force the sensor stream to re-establish so the Beta/Gamma
+        // bars update immediately. Clearing the cache causes the next
+        // access to sensorStream to create a fresh broadcast stream
+        // which re-attaches the native EventChannel listener.
+        GlanceChannelService.resetSensorStreamCache();
+      }
+    } catch (_) {
+      // Silently ignore — if the native side isn't ready yet, the UI
+      // stays in the default inactive state. No crash risk.
+    }
+  }
+
   // ── Handlers ────────────────────────────────────────────────────────────
 
   /// Toggle the overlay service on/off.
@@ -58,7 +98,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       if (value) {
-        await _channelService.startService();
+        // Pass localized notification strings so the foreground
+        // notification displays in the user's current language.
+        final strings = LocaleProvider.stringsOf(context);
+        await _channelService.startService(
+          notificationTitle: strings.notificationTitle,
+          notificationText: strings.notificationText,
+        );
       } else {
         await _channelService.stopService();
         // Reset calibration status when service stops

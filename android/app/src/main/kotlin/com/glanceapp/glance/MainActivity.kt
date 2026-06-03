@@ -66,7 +66,11 @@ class MainActivity : FlutterActivity() {
 
         methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
-                "startService"    -> handleStartService(result)
+                "startService"    -> {
+                    val notifTitle = call.argument<String>("notificationTitle")
+                    val notifText  = call.argument<String>("notificationText")
+                    handleStartService(result, notifTitle, notifText)
+                }
                 "stopService"     -> handleStopService(result)
                 "calibrate"       -> handleCalibrate(result)
                 "setSensitivity"  -> {
@@ -86,6 +90,9 @@ class MainActivity : FlutterActivity() {
                     val width  = call.argument<Int>("width") ?: 0
                     val height = call.argument<Int>("height") ?: 0
                     handleSetTargetedArea(x, y, width, height, result)
+                }
+                "isServiceRunning" -> {
+                    result.success(GlanceOverlayService.isRunning)
                 }
                 else -> result.notImplemented()
             }
@@ -137,10 +144,20 @@ class MainActivity : FlutterActivity() {
      * If not, guides the user to the Android settings page to grant it.
      * The result is held pending until [onActivityResult] resolves it.
      */
-    private fun handleStartService(result: MethodChannel.Result) {
+    /// Pending localized notification strings (held while waiting for permission).
+    private var pendingNotifTitle: String? = null
+    private var pendingNotifText: String? = null
+
+    private fun handleStartService(
+        result: MethodChannel.Result,
+        notifTitle: String? = null,
+        notifText: String? = null
+    ) {
         if (!Settings.canDrawOverlays(this)) {
             Log.d(TAG, "Overlay permission not granted — requesting...")
             pendingResult = result
+            pendingNotifTitle = notifTitle
+            pendingNotifText = notifText
 
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -150,7 +167,7 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        startOverlayService()
+        startOverlayService(notifTitle, notifText)
         result.success(true)
     }
 
@@ -255,7 +272,7 @@ class MainActivity : FlutterActivity() {
 
         if (requestCode == OVERLAY_PERMISSION_REQUEST) {
             if (Settings.canDrawOverlays(this)) {
-                startOverlayService()
+                startOverlayService(pendingNotifTitle, pendingNotifText)
                 pendingResult?.success(true)
                 Log.d(TAG, "Overlay permission granted")
             } else {
@@ -267,6 +284,8 @@ class MainActivity : FlutterActivity() {
                 Log.w(TAG, "Overlay permission denied by user")
             }
             pendingResult = null
+            pendingNotifTitle = null
+            pendingNotifText = null
         }
     }
 
@@ -275,14 +294,27 @@ class MainActivity : FlutterActivity() {
     /**
      * Starts the GlanceOverlayService as a foreground service.
      * Uses startForegroundService() on Android O+ for compliance.
+     *
+     * Optionally passes localized notification title/text from Flutter
+     * so the foreground notification displays in the user's language.
      */
-    private fun startOverlayService() {
-        val intent = Intent(this, GlanceOverlayService::class.java)
+    private fun startOverlayService(
+        notifTitle: String? = null,
+        notifText: String? = null
+    ) {
+        val intent = Intent(this, GlanceOverlayService::class.java).apply {
+            notifTitle?.let {
+                putExtra(GlanceOverlayService.EXTRA_NOTIFICATION_TITLE, it)
+            }
+            notifText?.let {
+                putExtra(GlanceOverlayService.EXTRA_NOTIFICATION_TEXT, it)
+            }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {
             startService(intent)
         }
-        Log.d(TAG, "Overlay service started")
+        Log.d(TAG, "Overlay service started (notifTitle=$notifTitle)")
     }
 }

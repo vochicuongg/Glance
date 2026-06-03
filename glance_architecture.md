@@ -1,22 +1,21 @@
-Nhiệm vụ: Fix triệt để bug không nhận trục Gamma trong file `GlanceOverlayService.kt`.
+Nhiệm vụ 1: Fix 0 độ trễ & Ép Fullscreen trong `GlanceTileService.kt`
+- Mở `GlanceTileService.kt`. Trong hàm `onClick()`:
+  1. Cập nhật trạng thái UI của Tile (Active <-> Inactive) và gọi `qsTile.updateTile()` NGAY LẬP TỨC ở đầu hàm để phản hồi chạm (0 độ trễ), không chờ Service.
+  2. Khởi tạo Intent gọi `GlanceOverlayService`:
+     ```kotlin
+     val intent = Intent(this, GlanceOverlayService::class.java).apply {
+         putExtra("mode", "fullscreen")
+         putExtra("notificationTitle", "Privacy Display")
+         putExtra("notificationText", "Running from Quick Settings")
+     }
+     ```
+  3. Nếu `GlanceOverlayService.isRunning` đang là true -> gọi `stopService(intent)`. Nếu false -> gọi `ContextCompat.startForegroundService(this, intent)`.
 
-Hãy kiểm tra kỹ 3 điểm "tử huyệt" sau:
-1. Hàm lấy Sensor (`SensorManager.getOrientation`): 
-   Đảm bảo lấy đúng mảng:
-   - `currentBeta = Math.toDegrees(orientationValues[1].toDouble()).toFloat()` (Pitch)
-   - `currentGamma = Math.toDegrees(orientationValues[2].toDouble()).toFloat()` (Roll)
+Nhiệm vụ 2: Đồng bộ 2 chiều (App <-> Tile)
+- Mở `GlanceOverlayService.kt`.
+- Trong hàm `onCreate()` và `onDestroy()`, BẮT BUỘC gọi lệnh này để ép Tile hệ thống tự cập nhật khi bật/tắt Service từ bên trong App:
+  ```kotlin
+  TileService.requestListeningState(this, ComponentName(this, GlanceTileService::class.java))
+Mở lại GlanceTileService.kt, hàm onStartListening() chỉ cần đọc biến GlanceOverlayService.isRunning, set qsTile.state tương ứng (STATE_ACTIVE hoặc STATE_INACTIVE), và gọi updateTile().
 
-2. Lỗi Calibration (Khả năng cao nhất):
-   Tìm hàm xử lý lệnh `calibrate` từ MethodChannel. CHẮC CHẮN RẰNG cả 2 biến đều được lưu:
-   `calibratedBeta = currentBeta`
-   `calibratedGamma = currentGamma` (Có vẻ code hiện tại đang bỏ quên dòng này).
-
-3. Công thức tính Deviation:
-   Đảm bảo đang dùng: 
-   `val dPitch = currentBeta - calibratedBeta`
-   `val dRoll = currentGamma - calibratedGamma`
-   `val deviation = Math.hypot(dPitch.toDouble(), dRoll.toDouble()).toFloat()`
-
-4. Debug (Quan trọng): Thêm một dòng `Log.d("GlanceSensor", "dBeta: $dPitch, dGamma: $dRoll, Deviation: $deviation")` vào chỗ tính toán để tôi có thể check trong Logcat nếu cần.
-
-Yêu cầu: Rà soát lại toàn bộ vòng đời của biến Gamma từ Sensor -> Calibrate -> Deviation. Fix dứt điểm và báo cáo chi tiết chỗ bị sai.
+Yêu cầu: Không thêm bất kỳ tính năng thừa nào (không rung, không icon phụ). Tập trung tối đa vào tốc độ phản hồi và độ ổn định. Code xong chạy flutter analyze để kiểm tra.

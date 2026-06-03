@@ -2,6 +2,7 @@ package com.glanceapp.glance
 
 import android.app.*
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -15,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.service.quicksettings.TileService
 import android.util.Log
 import android.view.Choreographer
 import android.view.Gravity
@@ -75,6 +77,19 @@ class GlanceOverlayService : Service(), SensorEventListener {
     companion object {
         private const val TAG = "GlanceOverlayService"
 
+        // ── Service Running State (for TileService communication) ─────────
+        /// Volatile flag indicating whether the service is currently running.
+        /// Read by GlanceTileService to update QS tile state (Active/Inactive).
+        /// Written only in onCreate/onDestroy — single writer, safe without locks.
+        @Volatile
+        var isRunning: Boolean = false
+            private set
+
+        /// Broadcast action sent when the service starts or stops.
+        /// GlanceTileService registers a receiver for this action to update
+        /// the Quick Settings tile in real-time.
+        const val ACTION_STATE_CHANGED = "com.glanceapp.glance.SERVICE_STATE_CHANGED"
+
         // ── Intent Actions ────────────────────────────────────────────────
         const val ACTION_CALIBRATE         = "com.glanceapp.glance.CALIBRATE"
         const val ACTION_SET_SENSITIVITY   = "com.glanceapp.glance.SET_SENSITIVITY"
@@ -88,6 +103,10 @@ class GlanceOverlayService : Service(), SensorEventListener {
         const val EXTRA_AREA_Y      = "area_y"
         const val EXTRA_AREA_WIDTH  = "area_width"
         const val EXTRA_AREA_HEIGHT = "area_height"
+
+        // ── Notification Extras (Localized from Flutter) ──────────────────
+        const val EXTRA_NOTIFICATION_TITLE = "notification_title"
+        const val EXTRA_NOTIFICATION_TEXT  = "notification_text"
 
         // ── Overlay Modes ─────────────────────────────────────────────────
         const val MODE_FULLSCREEN = "fullscreen"
@@ -227,6 +246,10 @@ class GlanceOverlayService : Service(), SensorEventListener {
     //  SERVICE LIFECYCLE
     // ══════════════════════════════════════════════════════════════════════
 
+    // ── Localized notification strings (received from Flutter) ────────────
+    private var notificationTitle: String = "Glance Active"
+    private var notificationText: String = "Your screen is being protected"
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service onCreate (v3.0 — Sensor Fusion + Choreographer)")
@@ -238,9 +261,27 @@ class GlanceOverlayService : Service(), SensorEventListener {
         registerSensors()
         registerScreenStateReceiver()
         startForeground(NOTIFICATION_ID, buildNotification())
+
+        // ── Update running state & notify TileService (2-way sync) ────────
+        isRunning = true
+        sendBroadcast(Intent(ACTION_STATE_CHANGED))
+        TileService.requestListeningState(this, ComponentName(this, GlanceTileService::class.java))
+        Log.d(TAG, "Service started — isRunning=true, broadcast sent, tile listening requested")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // ── Extract localized notification strings if provided ────────────
+        // These are passed from Flutter via the startService method channel
+        // on the very first start intent (no action set).
+        intent?.getStringExtra(EXTRA_NOTIFICATION_TITLE)?.let {
+            notificationTitle = it
+            Log.d(TAG, "Notification title updated: $it")
+        }
+        intent?.getStringExtra(EXTRA_NOTIFICATION_TEXT)?.let {
+            notificationText = it
+            Log.d(TAG, "Notification text updated: $it")
+        }
+
         when (intent?.action) {
             ACTION_CALIBRATE -> {
                 baselinePitch = currentPitch
@@ -268,6 +309,14 @@ class GlanceOverlayService : Service(), SensorEventListener {
                 val h = intent.getIntExtra(EXTRA_AREA_HEIGHT, 0)
                 handleSetTargetedArea(x, y, w, h)
             }
+
+            // null action = initial start — rebuild notification with localized strings
+            null -> {
+                // Re-post the notification with updated localized text
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(NOTIFICATION_ID, buildNotification())
+                Log.d(TAG, "Notification rebuilt with localized strings")
+            }
         }
 
         return START_STICKY
@@ -280,6 +329,12 @@ class GlanceOverlayService : Service(), SensorEventListener {
         unregisterSensors()
         cancelAnimator()
         removeOverlayView()
+
+        // ── Update running state & notify TileService (2-way sync) ────────
+        isRunning = false
+        sendBroadcast(Intent(ACTION_STATE_CHANGED))
+        TileService.requestListeningState(this, ComponentName(this, GlanceTileService::class.java))
+        Log.d(TAG, "Service destroyed — isRunning=false, broadcast sent, tile listening requested")
 
         super.onDestroy()
     }
@@ -420,6 +475,7 @@ class GlanceOverlayService : Service(), SensorEventListener {
             WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY
         }
 
+        @Suppress("DEPRECATION")
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -427,7 +483,8 @@ class GlanceOverlayService : Service(), SensorEventListener {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                or WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
             PixelFormat.TRANSLUCENT
         )
 
@@ -714,8 +771,8 @@ class GlanceOverlayService : Service(), SensorEventListener {
         )
 
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("Glance Active")
-            .setContentText("Your screen is being protected")
+            .setContentTitle(notificationTitle)
+            .setContentText(notificationText)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
