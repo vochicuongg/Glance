@@ -187,6 +187,11 @@ class GlanceOverlayService : Service(), SensorEventListener {
     /// Track if sensors are registered to avoid double-registration.
     private var sensorsRegistered: Boolean = false
 
+    /// Flag: auto-calibrate on the first sensor frame after Tile start.
+    /// Set in onStartCommand when intent carries autoCalibrate=true.
+    /// Consumed (reset to false) once the first sensor reading arrives.
+    private var pendingAutoCalibrate: Boolean = false
+
     // ── Choreographer Animation Engine (Snappy Lerp) ──────────────────────
     private var currentAlpha: Float = 0f
 
@@ -310,8 +315,28 @@ class GlanceOverlayService : Service(), SensorEventListener {
                 handleSetTargetedArea(x, y, w, h)
             }
 
-            // null action = initial start — rebuild notification with localized strings
+            // null action = initial start — handle mode + rebuild notification
             null -> {
+                // ── Extract requested overlay mode from Intent ─────────────
+                // When started from Quick Settings Tile, the intent carries
+                // mode="fullscreen" to ensure full-screen coverage immediately.
+                val reqMode = intent?.getStringExtra("mode")
+                if (reqMode == MODE_FULLSCREEN) {
+                    handleSetOverlayMode(MODE_FULLSCREEN)
+                    Log.d(TAG, "Forced fullscreen mode from start intent")
+                }
+
+                // ── Auto-calibrate flag from Tile start ────────────────────
+                // When started from Quick Settings Tile, auto-calibrate the
+                // current holding angle as baseline on the FIRST sensor frame.
+                // We set a flag here and consume it in the sensor callback,
+                // because sensors haven't delivered data yet at this point.
+                val autoCalibrate = intent?.getBooleanExtra("autoCalibrate", false) ?: false
+                if (autoCalibrate) {
+                    pendingAutoCalibrate = true
+                    Log.d(TAG, "Auto-calibrate requested — waiting for first sensor frame")
+                }
+
                 // Re-post the notification with updated localized text
                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 nm.notify(NOTIFICATION_ID, buildNotification())
@@ -644,6 +669,15 @@ class GlanceOverlayService : Service(), SensorEventListener {
         currentPitch = Math.toDegrees(orientationValues[1].toDouble()).toFloat()
         currentRoll  = Math.toDegrees(orientationValues[2].toDouble()).toFloat()
 
+        // ── Auto-calibrate on first sensor frame (Tile start) ─────────────
+        if (pendingAutoCalibrate) {
+            baselinePitch = currentPitch
+            baselineRoll  = currentRoll
+            isCalibrated  = true
+            pendingAutoCalibrate = false
+            Log.d(TAG, "Auto-calibrated from Tile → β₀=$baselinePitch°, γ₀=$baselineRoll°")
+        }
+
         // Broadcast sensor data to Flutter UI via EventChannel
         broadcastSensorToFlutter()
 
@@ -666,6 +700,15 @@ class GlanceOverlayService : Service(), SensorEventListener {
         // gamma = atan2(x, sqrt(y*y + z*z))
         currentPitch = Math.toDegrees(atan2(y, z)).toFloat()
         currentRoll  = Math.toDegrees(atan2(x, sqrt(y * y + z * z))).toFloat()
+
+        // ── Auto-calibrate on first sensor frame (Tile start) ─────────────
+        if (pendingAutoCalibrate) {
+            baselinePitch = currentPitch
+            baselineRoll  = currentRoll
+            isCalibrated  = true
+            pendingAutoCalibrate = false
+            Log.d(TAG, "Auto-calibrated from Tile (accel fallback) → β₀=$baselinePitch°, γ₀=$baselineRoll°")
+        }
 
         // Broadcast sensor data to Flutter UI via EventChannel
         broadcastSensorToFlutter()

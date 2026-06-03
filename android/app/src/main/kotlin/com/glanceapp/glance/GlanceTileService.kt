@@ -80,6 +80,7 @@ class GlanceTileService : TileService() {
             putExtra("mode", "fullscreen")
             putExtra("notificationTitle", "Privacy Display")
             putExtra("notificationText", "Running from Quick Settings")
+            putExtra("autoCalibrate", true)
         }
 
         if (GlanceOverlayService.isRunning) {

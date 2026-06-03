@@ -37,7 +37,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   // ── State ───────────────────────────────────────────────────────────────
   bool _isServiceActive = false;
   bool _isCalibrated = false;
@@ -52,7 +53,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _syncServiceState();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncServiceState();
+    }
   }
 
   /// Queries the native side to check if GlanceOverlayService is already
@@ -69,10 +84,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final isRunning = await GlanceChannelService.isServiceRunning();
       if (!mounted) return;
-      if (isRunning) {
+      if (isRunning != _isServiceActive) {
         setState(() {
-          _isServiceActive = true;
+          _isServiceActive = isRunning;
+          if (!isRunning) _isCalibrated = false;
         });
+      }
+      if (isRunning) {
         // Force the sensor stream to re-establish so the Beta/Gamma
         // bars update immediately. Clearing the cache causes the next
         // access to sensorStream to create a fresh broadcast stream
