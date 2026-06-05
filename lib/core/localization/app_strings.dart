@@ -108,6 +108,25 @@ class LocalizedStrings {
   final String sensorFrontBack;
   final String sensorLeftRight;
 
+  // ── Intensity Slider Card ────────────────────────────────────────────
+  final String intensity;
+  final String intensitySubtitle;
+  final String intensityLight;
+  final String intensityMax;
+
+  // ── Tolerance Slider Card (Hysteresis Dead Zone) ─────────────────────
+  final String tolerance;
+  final String toleranceSubtitle;
+  final String toleranceNarrow;
+  final String toleranceWide;
+
+  // ── Theme ─────────────────────────────────────────────────────────────
+  final String theme;
+  final String themeSubtitle;
+  final String systemMode;
+  final String lightMode;
+  final String darkMode;
+
   // ── Notification (Native Service) ───────────────────────────────────
   final String notificationTitle;
   final String notificationText;
@@ -153,6 +172,19 @@ class LocalizedStrings {
     required this.settings,
     required this.sensorFrontBack,
     required this.sensorLeftRight,
+    required this.intensity,
+    required this.intensitySubtitle,
+    required this.intensityLight,
+    required this.intensityMax,
+    required this.tolerance,
+    required this.toleranceSubtitle,
+    required this.toleranceNarrow,
+    required this.toleranceWide,
+    required this.theme,
+    required this.themeSubtitle,
+    required this.systemMode,
+    required this.lightMode,
+    required this.darkMode,
     required this.notificationTitle,
     required this.notificationText,
   });
@@ -235,6 +267,25 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     sensorFrontBack: 'Front / Back (Beta)',
     sensorLeftRight: 'Left / Right (Gamma)',
 
+    // Intensity
+    intensity: 'Vault Density',
+    intensitySubtitle: 'Adjust maximum overlay darkness',
+    intensityLight: 'Light',
+    intensityMax: 'Maximum',
+
+    // Tolerance (Hysteresis)
+    tolerance: 'Flicker Guard',
+    toleranceSubtitle: 'Dead zone to prevent boundary flicker',
+    toleranceNarrow: 'Narrow',
+    toleranceWide: 'Wide',
+
+    // Theme
+    theme: 'Appearance',
+    themeSubtitle: 'Switch between light and dark mode',
+    systemMode: 'System',
+    lightMode: 'Light',
+    darkMode: 'Dark',
+
     // Notification (Native Service)
     notificationTitle: 'Glance Active',
     notificationText: 'Your screen is being protected',
@@ -309,6 +360,25 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     settings: 'Cài đặt',
     sensorFrontBack: 'Trước / Sau (Beta)',
     sensorLeftRight: 'Trái / Phải (Gamma)',
+
+    // Cường độ che phủ
+    intensity: 'Mật độ két sắt',
+    intensitySubtitle: 'Điều chỉnh độ tối tối đa của lớp phủ',
+    intensityLight: 'Nhẹ',
+    intensityMax: 'Tối đa',
+
+    // Vùng chấp nhận lệch (Góc trễ)
+    tolerance: 'Vùng chấp nhận lệch',
+    toleranceSubtitle: 'Vùng trễ chống nhấp nháy ở ranh giới',
+    toleranceNarrow: 'Hẹp',
+    toleranceWide: 'Rộng',
+
+    // Giao diện
+    theme: 'Giao diện',
+    themeSubtitle: 'Chuyển đổi giữa chế độ sáng và tối',
+    systemMode: 'Hệ thống',
+    lightMode: 'Sáng',
+    darkMode: 'Tối',
 
     // Thông báo (Dịch vụ gốc)
     notificationTitle: 'Glance đang hoạt động',

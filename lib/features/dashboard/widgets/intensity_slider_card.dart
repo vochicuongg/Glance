@@ -1,37 +1,18 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/theme/app_colors.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
-/// Sensitivity Slider Card
+/// Intensity Slider Card — "Vault Density" Control
 /// ─────────────────────────────────────────────────────────────────────────────
-/// Allows the user to adjust the "Sensitivity / Tolerance" of the tilt
-/// detection. The value (0.0 – 1.0) maps to the `maxTolerance` parameter
-/// in the native deviation formula:
-///
-///   opacity = (deviation / maxTolerance)²
-///
-/// Visual feedback is provided via:
-///   • A gold-accented slider with smooth animation.
-///   • A label showing the current sensitivity level (Low / Medium / High).
-///   • A subtle description explaining what the setting does.
-/// ─────────────────────────────────────────────────────────────────────────────
-class SensitivitySliderCard extends StatelessWidget {
-  /// Current sensitivity value between 0.0 and 1.0.
+class IntensitySliderCard extends StatelessWidget {
   final double value;
-
-  /// Whether the service is active (slider is only interactive when active).
   final bool isServiceActive;
-
-  /// Called when the user changes the slider.
   final ValueChanged<double> onChanged;
-
-  /// Called when the user finishes dragging (to send to native side).
   final ValueChanged<double> onChangeEnd;
 
-  const SensitivitySliderCard({
+  const IntensitySliderCard({
     super.key,
     required this.value,
     required this.isServiceActive,
@@ -39,25 +20,12 @@ class SensitivitySliderCard extends StatelessWidget {
     required this.onChangeEnd,
   });
 
-  /// Returns a human-friendly label for the current sensitivity level.
-  String _sensitivityLabel(LocalizedStrings s) {
-    if (value < 0.33) return s.sensitivityLow;
-    if (value < 0.66) return s.sensitivityMedium;
-    return s.sensitivityHigh;
-  }
-
-  /// Returns a description for the current sensitivity level.
-  String _sensitivityDescription(LocalizedStrings s) {
-    if (value < 0.33) return s.sensitivityDescLow;
-    if (value < 0.66) return s.sensitivityDescMedium;
-    return s.sensitivityDescHigh;
-  }
-
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final strings = LocaleProvider.stringsOf(context);
     final isEnabled = isServiceActive;
+    final percentage = (value * 100).round();
 
     return Container(
       width: double.infinity,
@@ -70,7 +38,6 @@ class SensitivitySliderCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header Row ────────────────────────────────────────────────────
           Row(
             children: [
               Container(
@@ -83,7 +50,7 @@ class SensitivitySliderCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  Icons.tune_rounded,
+                  Icons.lock_rounded,
                   size: 18,
                   color: isEnabled
                       ? AppColors.accent(context)
@@ -96,7 +63,7 @@ class SensitivitySliderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      strings.sensitivity,
+                      strings.intensity,
                       style: textTheme.titleMedium?.copyWith(
                         color: isEnabled
                             ? AppColors.textPrimaryC(context)
@@ -105,13 +72,12 @@ class SensitivitySliderCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      strings.sensitivitySubtitle,
+                      strings.intensitySubtitle,
                       style: textTheme.bodySmall,
                     ),
                   ],
                 ),
               ),
-              // Current level badge
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 padding: const EdgeInsets.symmetric(
@@ -131,76 +97,57 @@ class SensitivitySliderCard extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  _sensitivityLabel(strings),
+                  '$percentage%',
                   style: textTheme.labelLarge?.copyWith(
                     color: isEnabled
                         ? AppColors.accent(context)
                         : AppColors.textTertiaryC(context),
                     fontSize: 12,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // ── Slider ────────────────────────────────────────────────────────
           SliderTheme(
             data: Theme.of(context).sliderTheme.copyWith(
-                  activeTrackColor: isEnabled
-                      ? AppColors.accent(context)
-                      : AppColors.textTertiaryC(context),
-                  thumbColor: isEnabled
-                      ? AppColors.accent(context)
-                      : AppColors.textTertiaryC(context),
-                  inactiveTrackColor: AppColors.surface(context),
-                ),
+              activeTrackColor: isEnabled
+                  ? AppColors.accent(context)
+                  : AppColors.textTertiaryC(context),
+              thumbColor: isEnabled
+                  ? AppColors.accent(context)
+                  : AppColors.textTertiaryC(context),
+              inactiveTrackColor: AppColors.surface(context),
+            ),
             child: Slider(
               value: value,
-              min: 0.0,
+              min: 0.1,
               max: 1.0,
               onChanged: isEnabled ? onChanged : null,
               onChangeEnd: isEnabled ? onChangeEnd : null,
             ),
           ),
-
-          // ── Scale Labels ──────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  strings.relaxed,
+                  strings.intensityLight,
                   style: textTheme.bodySmall?.copyWith(
                     color: AppColors.textTertiaryC(context),
                     fontSize: 11,
                   ),
                 ),
                 Text(
-                  strings.strict,
+                  strings.intensityMax,
                   style: textTheme.bodySmall?.copyWith(
                     color: AppColors.textTertiaryC(context),
                     fontSize: 11,
                   ),
                 ),
               ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── Description ───────────────────────────────────────────────────
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            child: Text(
-              _sensitivityDescription(strings),
-              key: ValueKey(_sensitivityLabel(strings)),
-              style: textTheme.bodySmall?.copyWith(
-                color: AppColors.textTertiaryC(context),
-                height: 1.4,
-              ),
             ),
           ),
         ],

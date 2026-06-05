@@ -95,6 +95,8 @@ class GlanceOverlayService : Service(), SensorEventListener {
         const val ACTION_SET_SENSITIVITY   = "com.glanceapp.glance.SET_SENSITIVITY"
         const val ACTION_SET_OVERLAY_MODE  = "com.glanceapp.glance.SET_OVERLAY_MODE"
         const val ACTION_SET_TARGETED_AREA = "com.glanceapp.glance.SET_TARGETED_AREA"
+        const val ACTION_SET_INTENSITY     = "com.glanceapp.glance.SET_INTENSITY"
+        const val ACTION_SET_TOLERANCE     = "com.glanceapp.glance.SET_TOLERANCE"
 
         // ── Intent Extras ─────────────────────────────────────────────────
         const val EXTRA_SENSITIVITY = "sensitivity"
@@ -103,6 +105,8 @@ class GlanceOverlayService : Service(), SensorEventListener {
         const val EXTRA_AREA_Y      = "area_y"
         const val EXTRA_AREA_WIDTH  = "area_width"
         const val EXTRA_AREA_HEIGHT = "area_height"
+        const val EXTRA_INTENSITY   = "intensity"
+        const val EXTRA_TOLERANCE   = "tolerance"
 
         // ── Notification Extras (Localized from Flutter) ──────────────────
         const val EXTRA_NOTIFICATION_TITLE = "notification_title"
@@ -130,6 +134,23 @@ class GlanceOverlayService : Service(), SensorEventListener {
         /// Alpha change threshold below which we snap animation updates.
         /// Prevents micro-animations from sensor noise.
         private const val ALPHA_DEADZONE = 0.005f
+
+        // ── Tolerance Zone Constants ────────────────────────────────────
+        /// Default safe zone radius in degrees (±x°).
+        /// Screen displays normally when tilt deviation is WITHIN ±x°.
+        /// Curtain activates when deviation EXCEEDS this angle.
+        ///
+        /// A fixed hysteresis dead zone of 2° is applied at the boundary:
+        ///   • Overlay ACTIVATES when deviation > toleranceAngle
+        ///   • Overlay DEACTIVATES when deviation < (toleranceAngle - 2°)
+        ///
+        /// Example: tolerance=5°
+        ///   → Overlay turns ON at >5° deviation from baseline
+        ///   → Overlay turns OFF when deviation drops below 3°
+        ///
+        /// This 2° hysteresis gap prevents flicker from natural hand
+        /// tremor (~1-3° amplitude) at the boundary.
+        private const val DEFAULT_TOLERANCE_ANGLE = 5.0f
 
         // ── EventChannel Sensor Stream ───────────────────────────────────
         /// Static EventSink set by MainActivity's EventChannel.
@@ -192,6 +213,27 @@ class GlanceOverlayService : Service(), SensorEventListener {
     /// Consumed (reset to false) once the first sensor reading arrives.
     private var pendingAutoCalibrate: Boolean = false
 
+    // ── Tolerance Zone State ──────────────────────────────────────────────
+    /// Safe zone radius in degrees (±x°). Screen displays normally when
+    /// tilt deviation from baseline is WITHIN this angle. Curtain activates
+    /// when deviation EXCEEDS this angle.
+    /// Controlled by the Flutter UI tolerance slider via setTolerance.
+    /// Range: 2.0° – 20.0° (default from DEFAULT_TOLERANCE_ANGLE = 5.0°)
+    private var toleranceAngle: Float = DEFAULT_TOLERANCE_ANGLE
+
+    /// Tracks whether the overlay is currently showing (alpha > 0).
+    /// Used by the hysteresis algorithm to prevent flicker at the
+    /// tolerance zone boundary (±x°). The 2° hysteresis dead zone means:
+    ///   • isOverlayShowing=false → activate only when deviation > toleranceAngle
+    ///   • isOverlayShowing=true  → deactivate only when deviation < (toleranceAngle - 2°)
+    private var isOverlayShowing: Boolean = false
+
+    // ── Overlay Intensity (Két sắt opacity ceiling) ──────────────────────
+    /// Maximum opacity the overlay can reach (0.0 – 1.0).
+    /// Controlled by the Flutter UI intensity slider via setIntensity.
+    /// Default 0.8 = 80% max darkness — user-adjustable "vault" density.
+    private var overlayIntensity: Float = 0.8f
+
     // ── Choreographer Animation Engine (Snappy Lerp) ──────────────────────
     private var currentAlpha: Float = 0f
 
@@ -206,11 +248,11 @@ class GlanceOverlayService : Service(), SensorEventListener {
             val diff = target - currentAlpha
             if (abs(diff) < ALPHA_DEADZONE) {
                 currentAlpha = target
-                overlayView?.alpha = currentAlpha
+                applyAlphaToOverlay(currentAlpha)
                 isAnimating = false
             } else {
                 currentAlpha += diff * 0.25f
-                overlayView?.alpha = currentAlpha
+                applyAlphaToOverlay(currentAlpha)
                 Choreographer.getInstance().postFrameCallback(this)
             }
         }
@@ -234,12 +276,24 @@ class GlanceOverlayService : Service(), SensorEventListener {
                     // Reset alpha to 0 (transparent) — no overlay when screen off
                     targetAlpha = 0f
                     currentAlpha = 0f
-                    overlayView?.post { overlayView?.alpha = 0f }
+                    // Reset hysteresis state so overlay starts fresh on SCREEN_ON
+                    isOverlayShowing = false
+                    overlayView?.post { applyAlphaToOverlay(0f) }
                 }
 
                 Intent.ACTION_SCREEN_ON -> {
                     Log.d(TAG, "SCREEN_ON → resuming sensors")
                     registerSensors()
+                }
+
+                Intent.ACTION_USER_PRESENT -> {
+                    // User has unlocked the device — ensure sensors are running
+                    // This handles the case where SCREEN_ON alone wasn't enough
+                    // (some OEMs delay sensor re-registration until unlock)
+                    Log.d(TAG, "USER_PRESENT → ensuring sensors are active")
+                    if (!sensorsRegistered) {
+                        registerSensors()
+                    }
                 }
             }
         }
@@ -298,8 +352,11 @@ class GlanceOverlayService : Service(), SensorEventListener {
             ACTION_SET_SENSITIVITY -> {
                 val normalized = intent.getFloatExtra(EXTRA_SENSITIVITY, 0.5f)
                     .coerceIn(0f, 1f)
-                maxTolerance = MIN_TOLERANCE + (MAX_TOLERANCE - MIN_TOLERANCE) * normalized
-                Log.d(TAG, "Sensitivity → normalized=$normalized, maxTolerance=$maxTolerance°")
+                // Inverted logic for High/Low sensitivity:
+                // Slider 1.0 (High) → small angle (MIN_TOLERANCE) = triggers easily
+                // Slider 0.0 (Low)  → large angle (MAX_TOLERANCE) = requires big tilt
+                maxTolerance = MAX_TOLERANCE - (normalized * (MAX_TOLERANCE - MIN_TOLERANCE))
+                Log.d(TAG, "Sensitivity → normalized=$normalized, maxTolerance=$maxTolerance° (inverted)")
             }
 
             ACTION_SET_OVERLAY_MODE -> {
@@ -313,6 +370,25 @@ class GlanceOverlayService : Service(), SensorEventListener {
                 val w = intent.getIntExtra(EXTRA_AREA_WIDTH, 0)
                 val h = intent.getIntExtra(EXTRA_AREA_HEIGHT, 0)
                 handleSetTargetedArea(x, y, w, h)
+            }
+
+            ACTION_SET_INTENSITY -> {
+                val intensity = intent.getFloatExtra(EXTRA_INTENSITY, 0.8f)
+                    .coerceIn(0.1f, 1.0f)
+                overlayIntensity = intensity
+                // Re-apply current alpha immediately with new ceiling
+                val clampedAlpha = targetAlpha.coerceAtMost(overlayIntensity)
+                targetAlpha = clampedAlpha
+                currentAlpha = clampedAlpha
+                overlayView?.post { applyAlphaToOverlay(clampedAlpha) }
+                Log.d(TAG, "Intensity → $overlayIntensity (vault density updated)")
+            }
+
+            ACTION_SET_TOLERANCE -> {
+                val tolerance = intent.getFloatExtra(EXTRA_TOLERANCE, DEFAULT_TOLERANCE_ANGLE)
+                    .coerceIn(2.0f, 40.0f)
+                toleranceAngle = tolerance
+                Log.d(TAG, "Tolerance → $toleranceAngle° (hysteresis dead zone updated)")
             }
 
             // null action = initial start — handle mode + rebuild notification
@@ -439,6 +515,23 @@ class GlanceOverlayService : Service(), SensorEventListener {
     // ══════════════════════════════════════════════════════════════════════
 
     /**
+     * Applies the given alpha (0.0–1.0) to the overlay view using
+     * setBackgroundColor with pure black ARGB.
+     *
+     * This replaces the old approach of using View.alpha, which could
+     * result in semi-transparent grey instead of true opaque black at
+     * max intensity. By setting Color.argb(alpha255, 0, 0, 0) directly,
+     * we guarantee R=0, G=0, B=0 at all levels — achieving absolute
+     * pitch-black darkness at alpha=255 (intensity=100%).
+     */
+    private fun applyAlphaToOverlay(alpha: Float) {
+        // Boost alpha by 20% for denser/thicker overlay curtain
+        val boostedAlpha = (alpha * 1.2f).coerceAtMost(1.0f)
+        val alpha255 = (boostedAlpha * 255).toInt().coerceIn(0, 255)
+        overlayView?.setBackgroundColor(Color.argb(alpha255, 0, 0, 0))
+    }
+
+    /**
      * Cancels the running Choreographer frame callback.
      * Called in [onDestroy] and on SCREEN_OFF.
      */
@@ -458,6 +551,7 @@ class GlanceOverlayService : Service(), SensorEventListener {
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -487,20 +581,33 @@ class GlanceOverlayService : Service(), SensorEventListener {
     //  OVERLAY VIEW (WindowManager)
     // ══════════════════════════════════════════════════════════════════════
 
+    @Suppress("DEPRECATION")
     private fun createOverlayView() {
         val view = View(this).apply {
-            setBackgroundColor(Color.BLACK)
-            alpha = 0f  // Start invisible
+            // Start fully transparent (alpha=0 in ARGB)
+            setBackgroundColor(Color.argb(0, 0, 0, 0))
+            // View alpha must be 1.0 — all opacity is controlled via ARGB background
+            alpha = 1f
+
+            // ── Immersive Sticky full-screen system UI flags ───────────────
+            // Force the view to lay out behind AND hide status bar, navigation
+            // bar, and suppress heads-up notifications from appearing on top.
+            systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
         }
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         } else {
-            @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY
         }
 
-        @Suppress("DEPRECATION")
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -509,14 +616,27 @@ class GlanceOverlayService : Service(), SensorEventListener {
                 or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                or WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
+                or WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
+                or WindowManager.LayoutParams.FLAG_FULLSCREEN
                 or WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
             PixelFormat.TRANSLUCENT
         )
 
+        // ── Display Cutout Mode (Android 9+ / API 28+) ───────────────────
+        // Allow overlay to render into the camera cutout / notch area
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            params.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        }
+
+        // ── Gravity: anchor to TOP|START to suppress Heads-up notifications ──
+        params.gravity = Gravity.TOP or Gravity.START
+
         windowManager.addView(view, params)
         overlayView = view
         overlayParams = params
-        Log.d(TAG, "Overlay view created (fullscreen mode, NO_LIMITS + IN_SCREEN)")
+        Log.d(TAG, "Overlay view created (fullscreen, NO_LIMITS + IN_SCREEN + TRANSLUCENT_NAV/STATUS + CUTOUT_ALWAYS)")
     }
 
     private fun removeOverlayView() {
@@ -749,6 +869,35 @@ class GlanceOverlayService : Service(), SensorEventListener {
      * it to the UI thread for animation.
      *
      * Called from both handleRotationVector() and handleAccelerometer().
+     *
+     * ── Tolerance Zone Algorithm (v3.0) ────────────────────────────────
+     * Definition: "Screen displays normally when tilt is WITHIN the safe
+     * zone of ±x° from baseline. Curtain activates when deviation EXCEEDS ±x°."
+     *
+     *   toleranceAngle = x° (the safe zone radius, user-adjustable)
+     *   HYSTERESIS_DEAD_ZONE = 2° (fixed buffer to prevent flicker)
+     *
+     * Thresholds with hysteresis:
+     *   • ACTIVATION:   deviation > toleranceAngle
+     *     → Tilt has left the safe zone → show curtain
+     *   • DEACTIVATION: deviation < (toleranceAngle - HYSTERESIS_DEAD_ZONE)
+     *     → Tilt has returned well inside safe zone → hide curtain
+     *
+     * The 2° gap between thresholds prevents flicker from natural hand
+     * tremor (~1-3° amplitude) when the user holds near the boundary.
+     *
+     * Alpha calculation (progressive darkening beyond safe zone):
+     *   excessDeviation = deviation - toleranceAngle
+     *   maxExcess = maxTolerance (how far beyond safe zone until fully dark)
+     *   alpha = clamp( (excessDeviation / maxExcess)², 0, 1 ) × intensity
+     *
+     * State diagram:
+     *   OFF ──[deviation > toleranceAngle]──────────────────→ ON
+     *   ON  ──[deviation < (toleranceAngle - 2°)]──→ OFF
+     *
+     * The isOverlayShowing flag ensures show/hide commands are NOT called
+     * redundantly — saving battery by avoiding unnecessary WindowManager
+     * layout updates on every sensor frame.
      */
     private fun computeAndDispatchAlpha() {
         // Skip if not calibrated yet
@@ -759,20 +908,52 @@ class GlanceOverlayService : Service(), SensorEventListener {
         // Uses Math.hypot for numerical stability (avoids overflow/underflow)
         val dPitch = (currentPitch - baselinePitch).toDouble()
         val dRoll  = (currentRoll  - baselineRoll).toDouble()
-        var deviation = Math.hypot(dPitch, dRoll).toFloat()
+        val deviation = Math.hypot(dPitch, dRoll).toFloat()
 
-        Log.d("GlanceSensor", "dBeta: $dPitch, dGamma: $dRoll, Deviation: $deviation")
+        Log.d("GlanceSensor", "dBeta: $dPitch, dGamma: $dRoll, Deviation: $deviation, tolerance: $toleranceAngle, isOverlayShowing: $isOverlayShowing")
 
-        // ── Snap-to-Zero & Target Alpha Calculation ──────────────────────
-        val newTargetAlpha = if (deviation <= 2.5f) {
-            deviation = 0.0f
-            0.0f
+        // ── Tolerance Zone with Hysteresis ────────────────────────────────
+        // toleranceAngle = safe zone radius (±x°). Screen is normal WITHIN this zone.
+        // Curtain activates only when deviation EXCEEDS toleranceAngle.
+        // HYSTERESIS_DEAD_ZONE (2°) prevents flicker at the boundary.
+        val hysteresisDeadZone = 2.0f
+        val thresholdToTurnOn  = toleranceAngle
+        val thresholdToTurnOff = (toleranceAngle - hysteresisDeadZone).coerceAtLeast(0f)
+
+        val newTargetAlpha: Float
+
+        if (!isOverlayShowing && deviation > thresholdToTurnOn) {
+            // ── ACTIVATE: deviation exceeded safe zone ±x° ────────────────
+            // Tilt has left the tolerance zone → show curtain
+            isOverlayShowing = true
+            val excessDeviation = (deviation - toleranceAngle).coerceAtLeast(0f)
+            val normalizedExcess = (excessDeviation / maxTolerance).coerceIn(0f, 1f)
+            newTargetAlpha = (normalizedExcess.pow(2) * overlayIntensity)
+                .coerceAtMost(overlayIntensity)
+            Log.d(TAG, "Tolerance → OVERLAY ON (deviation=$deviation° > safeZone=$toleranceAngle°)")
+
+        } else if (isOverlayShowing && deviation < thresholdToTurnOff) {
+            // ── DEACTIVATE: deviation returned inside safe zone ────────────
+            // Tilt is well back within ±x° (with hysteresis buffer) → hide curtain
+            isOverlayShowing = false
+            newTargetAlpha = 0.0f
+            Log.d(TAG, "Tolerance → OVERLAY OFF (deviation=$deviation° < safeReturn=${thresholdToTurnOff}°)")
+
+        } else if (isOverlayShowing) {
+            // ── ACTIVE: overlay showing, update alpha proportionally ───────
+            // Progressive darkening based on how far beyond ±x° the tilt is
+            val excessDeviation = (deviation - toleranceAngle).coerceAtLeast(0f)
+            val normalizedExcess = (excessDeviation / maxTolerance).coerceIn(0f, 1f)
+            newTargetAlpha = (normalizedExcess.pow(2) * overlayIntensity)
+                .coerceAtMost(overlayIntensity)
+
         } else {
-            val normalizedDeviation = (deviation / maxTolerance).coerceIn(0f, 1f)
-            normalizedDeviation.pow(2)
+            // ── INACTIVE: deviation within safe zone ±x° ──────────────────
+            // Screen displays normally — no overlay needed
+            return
         }
 
-        // Skip if target hasn't changed significantly (deadzone), unless target is 0f
+        // Skip if target hasn't changed significantly (deadzone), unless snapping to 0
         if (newTargetAlpha != 0.0f && abs(newTargetAlpha - targetAlpha) < ALPHA_DEADZONE) return
 
         // ── Write target for UI thread consumption ────────────────────────

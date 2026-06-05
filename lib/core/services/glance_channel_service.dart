@@ -280,6 +280,56 @@ class GlanceChannelService {
       );
     }
   }
+
+  /// Sends the hysteresis tolerance (dead zone) value to the native service.
+  ///
+  /// Controls the angle difference (in degrees) between the activation
+  /// threshold and the deactivation threshold to prevent flicker:
+  ///   • Overlay ACTIVATES when deviation > snapToZeroThreshold
+  ///   • Overlay DEACTIVATES when deviation < (snapToZeroThreshold - tolerance)
+  ///
+  /// [tolerance] range: 2.0 – 20.0 degrees (default: 5.0)
+  ///   • 2° = narrow dead zone, more responsive but may flicker
+  ///   • 20° = wide dead zone, very stable but slower response
+  Future<bool> setTolerance(double tolerance) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'setTolerance',
+        {'tolerance': tolerance},
+      );
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      throw GlanceServiceException(
+        'Failed to set tolerance: ${e.message}',
+      );
+    }
+  }
+
+  /// Sends the overlay intensity (vault density) value to the native service.
+  ///
+  /// Controls the maximum opacity the overlay can reach:
+  ///   • 0.1 = nearly transparent (10% max darkness)
+  ///   • 1.0 = fully opaque (100% max darkness)
+  ///
+  /// The native side clamps the computed alpha to never exceed this value,
+  /// giving users precise control over how dark the "vault" gets.
+  Future<bool> setIntensity(double intensity) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'setIntensity',
+        {'intensity': intensity},
+      );
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      throw GlanceServiceException(
+        'Failed to set intensity: ${e.message}',
+      );
+    }
+  }
 }
 
 /// Custom exception for Glance service errors.

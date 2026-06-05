@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'core/localization/locale_provider.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_provider.dart';
 import 'features/dashboard/screens/dashboard_screen.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
@@ -16,14 +17,14 @@ import 'features/dashboard/screens/dashboard_screen.dart';
 ///   • MethodChannel bridge for communication
 ///
 /// This file initialises the app with:
-///   • OLED-optimised dark theme
-///   • System chrome set to match the dark aesthetic
+///   • Dual-mode theme (Dark default + Light mode via Settings)
+///   • System chrome adapts to the current theme
 ///   • DashboardScreen as the home screen
 /// ─────────────────────────────────────────────────────────────────────────────
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock system chrome to match the OLED dark aesthetic
+  // Initial system chrome — will be updated dynamically by theme
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -42,23 +43,31 @@ class GlanceApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // LocaleProviderWidget wraps the entire app ABOVE MaterialApp.
-    // This ensures:
-    //   • All widgets can access LocaleProvider.of(context)
-    //   • Language changes rebuild only text, not service state
-    //   • DashboardScreen's StatefulWidget state is preserved
-    return LocaleProviderWidget(
-      child: MaterialApp(
-        title: 'Glance',
-        debugShowCheckedModeBanner: false,
+    // ThemeProviderWidget wraps everything so all descendants can
+    // access ThemeProvider.of(context) to read/change the theme mode.
+    //
+    // LocaleProviderWidget wraps MaterialApp ABOVE so language changes
+    // rebuild only text, not service state.
+    return ThemeProviderWidget(
+      child: LocaleProviderWidget(
+        child: Builder(
+          builder: (context) {
+            final themeProvider = ThemeProvider.of(context);
 
-        // Apply the OLED Dark + Gold accent theme
-        theme: AppTheme.darkTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.dark,
+            return MaterialApp(
+              title: 'Glance',
+              debugShowCheckedModeBanner: false,
 
-        // Dashboard is the single home screen
-        home: const DashboardScreen(),
+              // Dual-mode theme system
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeProvider.themeMode,
+
+              // Dashboard is the single home screen
+              home: const DashboardScreen(),
+            );
+          },
+        ),
       ),
     );
   }

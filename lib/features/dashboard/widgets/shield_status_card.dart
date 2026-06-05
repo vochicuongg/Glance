@@ -11,10 +11,7 @@ import '../../../core/theme/app_colors.dart';
 /// and a fluid toggle switch to enable/disable the Glance overlay service.
 /// ─────────────────────────────────────────────────────────────────────────────
 class ShieldStatusCard extends StatelessWidget {
-  /// Whether the overlay service is currently active.
   final bool isActive;
-
-  /// Called when the user toggles the service on/off.
   final ValueChanged<bool> onToggle;
 
   const ShieldStatusCard({
@@ -32,19 +29,18 @@ class ShieldStatusCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
       decoration: BoxDecoration(
-        color: AppColors.darkCharcoal,
+        color: AppColors.cardSurface(context),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isActive
-              ? AppColors.gold.withValues(alpha: 0.3)
-              : AppColors.borderDark,
+              ? AppColors.accent(context).withValues(alpha: 0.3)
+              : AppColors.border(context),
           width: 1,
         ),
-        // Subtle gold glow when active
         boxShadow: isActive
             ? [
                 BoxShadow(
-                  color: AppColors.gold.withValues(alpha: 0.08),
+                  color: AppColors.accent(context).withValues(alpha: 0.08),
                   blurRadius: 40,
                   spreadRadius: 0,
                   offset: const Offset(0, 8),
@@ -54,26 +50,22 @@ class ShieldStatusCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // ── Animated Shield Icon ──────────────────────────────────────────
           _AnimatedShieldIcon(isActive: isActive),
-
           const SizedBox(height: 20),
-
-          // ── Status Text ───────────────────────────────────────────────────
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: Text(
               isActive ? strings.protectionActive : strings.protectionDisabled,
               key: ValueKey('title_${isActive}_${strings.protectionActive}'),
               style: textTheme.headlineMedium?.copyWith(
-                color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+                color: isActive
+                    ? AppColors.textPrimaryC(context)
+                    : AppColors.textTertiaryC(context),
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-
           const SizedBox(height: 8),
-
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: Text(
@@ -82,15 +74,12 @@ class ShieldStatusCard extends StatelessWidget {
                   : strings.protectionDisabledDesc,
               key: ValueKey('desc_${isActive}_${strings.protectionActiveDesc}'),
               style: textTheme.bodyMedium?.copyWith(
-                color: AppColors.textTertiary,
+                color: AppColors.textTertiaryC(context),
               ),
               textAlign: TextAlign.center,
             ),
           ),
-
           const SizedBox(height: 28),
-
-          // ── Toggle Switch ─────────────────────────────────────────────────
           _ServiceToggle(isActive: isActive, onToggle: onToggle),
         ],
       ),
@@ -114,12 +103,12 @@ class _AnimatedShieldIcon extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: isActive
-            ? AppColors.gold.withValues(alpha: 0.12)
-            : AppColors.surfaceDark,
+            ? AppColors.accent(context).withValues(alpha: 0.12)
+            : AppColors.surface(context),
         border: Border.all(
           color: isActive
-              ? AppColors.gold.withValues(alpha: 0.4)
-              : AppColors.borderDark,
+              ? AppColors.accent(context).withValues(alpha: 0.4)
+              : AppColors.border(context),
           width: 1.5,
         ),
       ),
@@ -130,7 +119,9 @@ class _AnimatedShieldIcon extends StatelessWidget {
           isActive ? Icons.shield_rounded : Icons.shield_outlined,
           key: ValueKey('shield_$isActive'),
           size: 40,
-          color: isActive ? AppColors.gold : AppColors.textTertiary,
+          color: isActive
+              ? AppColors.accent(context)
+              : AppColors.textTertiaryC(context),
         ),
       ),
     );
@@ -149,16 +140,15 @@ class _ServiceToggle extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
+        color: AppColors.surface(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderDark, width: 0.5),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
-              // Small status dot
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 width: 8,
@@ -171,7 +161,8 @@ class _ServiceToggle extends StatelessWidget {
                   boxShadow: isActive
                       ? [
                           BoxShadow(
-                            color: AppColors.statusActive.withValues(alpha: 0.5),
+                            color:
+                                AppColors.statusActive.withValues(alpha: 0.5),
                             blurRadius: 6,
                           ),
                         ]
@@ -184,7 +175,7 @@ class _ServiceToggle extends StatelessWidget {
                     ? LocaleProvider.stringsOf(context).serviceRunning
                     : LocaleProvider.stringsOf(context).serviceStopped,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: AppColors.textSecondaryC(context),
                     ),
               ),
             ],

@@ -6,31 +6,10 @@ import '../../../core/theme/app_colors.dart';
 /// ─────────────────────────────────────────────────────────────────────────────
 /// Overlay Mode Card
 /// ─────────────────────────────────────────────────────────────────────────────
-/// A premium segmented toggle card that lets the user switch between:
-///   • Fullscreen — overlay covers the entire screen
-///   • Targeted   — overlay covers only a user-defined rectangular area
-///
-/// Design:
-///   • Uses a custom segmented control built from two adjacent toggles.
-///   • Gold highlight on the selected segment, dark charcoal on unselected.
-///   • Smooth 300ms animated transitions between states.
-///   • Disabled state when the service is not active (lower opacity).
-///
-/// When "Targeted" is selected and service is active, shows a "Define Area"
-/// button that navigates to the TargetedAreaEditor screen.
-/// ─────────────────────────────────────────────────────────────────────────────
 class OverlayModeCard extends StatelessWidget {
-  /// Whether the overlay service is currently active.
   final bool isServiceActive;
-
-  /// Current overlay mode: true = targeted, false = fullscreen.
   final bool isTargetedMode;
-
-  /// Called when the user switches mode.
-  /// [isTargeted] — true for targeted, false for fullscreen.
   final ValueChanged<bool> onModeChanged;
-
-  /// Called when the user taps "Define Area" (only in targeted mode).
   final VoidCallback onDefineArea;
 
   const OverlayModeCard({
@@ -51,9 +30,9 @@ class OverlayModeCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.darkCharcoal,
+        color: AppColors.cardSurface(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderDark, width: 0.5),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,8 +45,8 @@ class OverlayModeCard extends StatelessWidget {
                 height: 36,
                 decoration: BoxDecoration(
                   color: isEnabled
-                      ? AppColors.gold.withValues(alpha: 0.12)
-                      : AppColors.surfaceDark,
+                      ? AppColors.accent(context).withValues(alpha: 0.12)
+                      : AppColors.surface(context),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -75,7 +54,9 @@ class OverlayModeCard extends StatelessWidget {
                       ? Icons.crop_free_rounded
                       : Icons.fullscreen_rounded,
                   size: 18,
-                  color: isEnabled ? AppColors.gold : AppColors.textTertiary,
+                  color: isEnabled
+                      ? AppColors.accent(context)
+                      : AppColors.textTertiaryC(context),
                 ),
               ),
               const SizedBox(width: 12),
@@ -87,8 +68,8 @@ class OverlayModeCard extends StatelessWidget {
                       strings.coverageMode,
                       style: textTheme.titleMedium?.copyWith(
                         color: isEnabled
-                            ? AppColors.textPrimary
-                            : AppColors.textTertiary,
+                            ? AppColors.textPrimaryC(context)
+                            : AppColors.textTertiaryC(context),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -111,13 +92,12 @@ class OverlayModeCard extends StatelessWidget {
             child: Container(
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.surfaceDark,
+                color: AppColors.surface(context),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.borderDark, width: 0.5),
+                border: Border.all(color: AppColors.border(context), width: 0.5),
               ),
               child: Row(
                 children: [
-                  // Fullscreen segment
                   Expanded(
                     child: _SegmentButton(
                       label: strings.fullScreen,
@@ -127,7 +107,6 @@ class OverlayModeCard extends StatelessWidget {
                       onTap: isEnabled ? () => onModeChanged(false) : null,
                     ),
                   ),
-                  // Targeted segment
                   Expanded(
                     child: _SegmentButton(
                       label: strings.targeted,
@@ -156,7 +135,7 @@ class OverlayModeCard extends StatelessWidget {
                   Text(
                     strings.targetedDescription,
                     style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.textTertiary,
+                      color: AppColors.textTertiaryC(context),
                       height: 1.5,
                     ),
                   ),
@@ -168,13 +147,14 @@ class OverlayModeCard extends StatelessWidget {
                       onPressed: onDefineArea,
                       style: ElevatedButton.styleFrom(
                         backgroundColor:
-                            AppColors.gold.withValues(alpha: 0.15),
-                        foregroundColor: AppColors.gold,
+                            AppColors.accent(context).withValues(alpha: 0.15),
+                        foregroundColor: AppColors.accent(context),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                           side: BorderSide(
-                            color: AppColors.gold.withValues(alpha: 0.3),
+                            color: AppColors.accent(context)
+                                .withValues(alpha: 0.3),
                             width: 0.5,
                           ),
                         ),
@@ -184,7 +164,7 @@ class OverlayModeCard extends StatelessWidget {
                       label: Text(
                         strings.defineProtectedArea,
                         style: textTheme.labelLarge?.copyWith(
-                          color: AppColors.gold,
+                          color: AppColors.accent(context),
                         ),
                       ),
                     ),
@@ -192,7 +172,6 @@ class OverlayModeCard extends StatelessWidget {
                 ],
               ),
             ),
-            // Show nothing when fullscreen mode
             secondChild: const SizedBox.shrink(),
           ),
         ],
@@ -203,10 +182,6 @@ class OverlayModeCard extends StatelessWidget {
 
 /// ─────────────────────────────────────────────────────────────────────────────
 /// Segment Button (Private)
-/// ─────────────────────────────────────────────────────────────────────────────
-/// A single segment within the custom segmented control.
-/// Selected state shows a Gold-tinted background with Gold text/icon.
-/// Unselected state is transparent with muted text.
 /// ─────────────────────────────────────────────────────────────────────────────
 class _SegmentButton extends StatelessWidget {
   final String label;
@@ -233,12 +208,12 @@ class _SegmentButton extends StatelessWidget {
         margin: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.gold.withValues(alpha: 0.15)
+              ? AppColors.accent(context).withValues(alpha: 0.15)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(11),
           border: isSelected
               ? Border.all(
-                  color: AppColors.gold.withValues(alpha: 0.3),
+                  color: AppColors.accent(context).withValues(alpha: 0.3),
                   width: 0.5,
                 )
               : null,
@@ -249,13 +224,17 @@ class _SegmentButton extends StatelessWidget {
             Icon(
               icon,
               size: 16,
-              color: isSelected ? AppColors.gold : AppColors.textTertiary,
+              color: isSelected
+                  ? AppColors.accent(context)
+                  : AppColors.textTertiaryC(context),
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? AppColors.gold : AppColors.textTertiary,
+                color: isSelected
+                    ? AppColors.accent(context)
+                    : AppColors.textTertiaryC(context),
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 letterSpacing: 0.3,

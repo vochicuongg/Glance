@@ -9,20 +9,10 @@ import '../../../core/theme/app_colors.dart';
 /// A sleek card with a calibration button that tells the native service
 /// to capture the current device orientation as the baseline angles
 /// (pitch β₀ and roll γ₀).
-///
-/// Includes:
-///   • An animated icon that spins briefly during calibration.
-///   • Visual feedback on calibration status (calibrated / not calibrated).
-///   • User-friendly explanation of what calibration does.
 /// ─────────────────────────────────────────────────────────────────────────────
 class CalibrateCard extends StatefulWidget {
-  /// Whether the overlay service is currently active.
   final bool isServiceActive;
-
-  /// Whether a baseline has been calibrated.
   final bool isCalibrated;
-
-  /// Called when the user taps the calibrate button.
   final VoidCallback onCalibrate;
 
   const CalibrateCard({
@@ -56,17 +46,14 @@ class _CalibrateCardState extends State<CalibrateCard>
     super.dispose();
   }
 
-  /// Triggers the calibration with a brief spin animation for visual feedback.
   Future<void> _handleCalibrate() async {
     if (_isCalibrating || !widget.isServiceActive) return;
 
     setState(() => _isCalibrating = true);
     _spinController.forward(from: 0);
 
-    // Execute calibration callback
     widget.onCalibrate();
 
-    // Wait for the animation to complete
     await Future.delayed(const Duration(milliseconds: 900));
 
     if (mounted) {
@@ -84,9 +71,9 @@ class _CalibrateCardState extends State<CalibrateCard>
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.darkCharcoal,
+        color: AppColors.cardSurface(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderDark, width: 0.5),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,8 +86,8 @@ class _CalibrateCardState extends State<CalibrateCard>
                 height: 36,
                 decoration: BoxDecoration(
                   color: isEnabled
-                      ? AppColors.gold.withValues(alpha: 0.12)
-                      : AppColors.surfaceDark,
+                      ? AppColors.accent(context).withValues(alpha: 0.12)
+                      : AppColors.surface(context),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: RotationTransition(
@@ -111,8 +98,9 @@ class _CalibrateCardState extends State<CalibrateCard>
                   child: Icon(
                     Icons.explore_rounded,
                     size: 18,
-                    color:
-                        isEnabled ? AppColors.gold : AppColors.textTertiary,
+                    color: isEnabled
+                        ? AppColors.accent(context)
+                        : AppColors.textTertiaryC(context),
                   ),
                 ),
               ),
@@ -125,8 +113,8 @@ class _CalibrateCardState extends State<CalibrateCard>
                       strings.viewingAngle,
                       style: textTheme.titleMedium?.copyWith(
                         color: isEnabled
-                            ? AppColors.textPrimary
-                            : AppColors.textTertiary,
+                            ? AppColors.textPrimaryC(context)
+                            : AppColors.textTertiaryC(context),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -145,12 +133,12 @@ class _CalibrateCardState extends State<CalibrateCard>
                 decoration: BoxDecoration(
                   color: widget.isCalibrated && isEnabled
                       ? AppColors.statusActive.withValues(alpha: 0.12)
-                      : AppColors.surfaceDark,
+                      : AppColors.surface(context),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: widget.isCalibrated && isEnabled
                         ? AppColors.statusActive.withValues(alpha: 0.3)
-                        : AppColors.borderDark,
+                        : AppColors.border(context),
                     width: 0.5,
                   ),
                 ),
@@ -164,16 +152,18 @@ class _CalibrateCardState extends State<CalibrateCard>
                         shape: BoxShape.circle,
                         color: widget.isCalibrated && isEnabled
                             ? AppColors.statusActive
-                            : AppColors.textTertiary,
+                            : AppColors.textTertiaryC(context),
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      widget.isCalibrated ? strings.calibrationSet : strings.calibrationNotSet,
+                      widget.isCalibrated
+                          ? strings.calibrationSet
+                          : strings.calibrationNotSet,
                       style: textTheme.bodySmall?.copyWith(
                         color: widget.isCalibrated && isEnabled
                             ? AppColors.statusActive
-                            : AppColors.textTertiary,
+                            : AppColors.textTertiaryC(context),
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
@@ -190,7 +180,7 @@ class _CalibrateCardState extends State<CalibrateCard>
           Text(
             strings.calibrateDescription,
             style: textTheme.bodySmall?.copyWith(
-              color: AppColors.textTertiary,
+              color: AppColors.textTertiaryC(context),
               height: 1.5,
             ),
           ),
@@ -207,17 +197,18 @@ class _CalibrateCardState extends State<CalibrateCard>
               child: ElevatedButton.icon(
                 onPressed: isEnabled ? _handleCalibrate : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.gold.withValues(alpha: 0.15),
-                  foregroundColor: AppColors.gold,
-                  disabledBackgroundColor: AppColors.surfaceDark,
-                  disabledForegroundColor: AppColors.textTertiary,
+                  backgroundColor:
+                      AppColors.accent(context).withValues(alpha: 0.15),
+                  foregroundColor: AppColors.accent(context),
+                  disabledBackgroundColor: AppColors.surface(context),
+                  disabledForegroundColor: AppColors.textTertiaryC(context),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                     side: BorderSide(
                       color: isEnabled
-                          ? AppColors.gold.withValues(alpha: 0.3)
-                          : AppColors.borderDark,
+                          ? AppColors.accent(context).withValues(alpha: 0.3)
+                          : AppColors.border(context),
                       width: 0.5,
                     ),
                   ),
@@ -228,14 +219,16 @@ class _CalibrateCardState extends State<CalibrateCard>
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: AppColors.gold,
+                          color: AppColors.accent(context),
                         ),
                       )
                     : const Icon(Icons.my_location_rounded, size: 18),
                 label: Text(
                   _isCalibrating ? strings.calibrating : strings.calibrateNow,
                   style: textTheme.labelLarge?.copyWith(
-                    color: isEnabled ? AppColors.gold : AppColors.textTertiary,
+                    color: isEnabled
+                        ? AppColors.accent(context)
+                        : AppColors.textTertiaryC(context),
                   ),
                 ),
               ),

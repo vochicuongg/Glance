@@ -91,6 +91,14 @@ class MainActivity : FlutterActivity() {
                     val height = call.argument<Int>("height") ?: 0
                     handleSetTargetedArea(x, y, width, height, result)
                 }
+                "setIntensity" -> {
+                    val intensity = call.argument<Double>("intensity") ?: 0.8
+                    handleSetIntensity(intensity, result)
+                }
+                "setTolerance" -> {
+                    val tolerance = call.argument<Double>("tolerance") ?: 5.0
+                    handleSetTolerance(tolerance, result)
+                }
                 "isServiceRunning" -> {
                     result.success(GlanceOverlayService.isRunning)
                 }
@@ -262,6 +270,41 @@ class MainActivity : FlutterActivity() {
         }
         startService(intent)
         Log.d(TAG, "Targeted area sent: x=$x, y=$y, w=$width, h=$height (physical px)")
+        result.success(true)
+    }
+
+    /**
+     * Sends the overlay intensity (vault density) value to the running service.
+     *
+     * @param intensity Opacity ceiling (0.1 = nearly transparent, 1.0 = fully opaque).
+     */
+    private fun handleSetIntensity(intensity: Double, result: MethodChannel.Result) {
+        val intent = Intent(this, GlanceOverlayService::class.java).apply {
+            action = GlanceOverlayService.ACTION_SET_INTENSITY
+            putExtra(GlanceOverlayService.EXTRA_INTENSITY, intensity.toFloat())
+        }
+        startService(intent)
+        Log.d(TAG, "Intensity set to $intensity")
+        result.success(true)
+    }
+
+    /**
+     * Sends the hysteresis tolerance (dead zone) value to the running service.
+     *
+     * Controls the angle gap between activation and deactivation thresholds
+     * to prevent flicker at boundary angles:
+     *   • Overlay ACTIVATES when deviation > snapToZeroThreshold
+     *   • Overlay DEACTIVATES when deviation < (snapToZeroThreshold - tolerance)
+     *
+     * @param tolerance Dead zone width in degrees (2.0 – 20.0, default 5.0).
+     */
+    private fun handleSetTolerance(tolerance: Double, result: MethodChannel.Result) {
+        val intent = Intent(this, GlanceOverlayService::class.java).apply {
+            action = GlanceOverlayService.ACTION_SET_TOLERANCE
+            putExtra(GlanceOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
+        }
+        startService(intent)
+        Log.d(TAG, "Tolerance set to $tolerance°")
         result.success(true)
     }
 

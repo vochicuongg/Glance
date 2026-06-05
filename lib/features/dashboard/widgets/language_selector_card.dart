@@ -7,20 +7,6 @@ import '../../../core/theme/app_colors.dart';
 /// ─────────────────────────────────────────────────────────────────────────────
 /// LanguageSelectorCard — Premium Language Switcher
 /// ─────────────────────────────────────────────────────────────────────────────
-/// A sleek card that lets the user switch between English and Vietnamese.
-///
-/// Design:
-///   • Two-segment toggle (similar to iOS segmented control)
-///   • Gold highlight on the active language
-///   • Instant switch — no dialog, no confirmation
-///   • Matches the premium finance-centric aesthetic
-///
-/// Architecture:
-///   • Reads current locale from [LocaleProvider.of(context)]
-///   • Calls [LocaleProvider.of(context).setLocale()] to switch
-///   • InheritedWidget propagation ensures all widgets rebuild with
-///     new strings — service state is preserved (zero state loss)
-/// ─────────────────────────────────────────────────────────────────────────────
 class LanguageSelectorCard extends StatelessWidget {
   const LanguageSelectorCard({super.key});
 
@@ -33,10 +19,10 @@ class LanguageSelectorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.darkCharcoal,
+        color: AppColors.cardSurface(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.gold.withValues(alpha: 0.1),
+          color: AppColors.accent(context).withValues(alpha: 0.1),
           width: 1,
         ),
       ),
@@ -49,12 +35,12 @@ class LanguageSelectorCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.1),
+                  color: AppColors.accent(context).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.translate_rounded,
-                  color: AppColors.gold,
+                  color: AppColors.accent(context),
                   size: 20,
                 ),
               ),
@@ -65,8 +51,8 @@ class LanguageSelectorCard extends StatelessWidget {
                   children: [
                     Text(
                       strings.language,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.textPrimaryC(context),
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
@@ -75,7 +61,7 @@ class LanguageSelectorCard extends StatelessWidget {
                     Text(
                       strings.languageSubtitle,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: AppColors.textTertiaryC(context),
                         fontSize: 12,
                       ),
                     ),
@@ -90,7 +76,7 @@ class LanguageSelectorCard extends StatelessWidget {
           // ── Segmented Language Toggle ──────────────────────────────────
           Container(
             decoration: BoxDecoration(
-              color: AppColors.surfaceDark,
+              color: AppColors.surface(context),
               borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.all(4),
@@ -106,12 +92,14 @@ class LanguageSelectorCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppColors.gold.withValues(alpha: 0.15)
+                            ? AppColors.accent(context)
+                                .withValues(alpha: 0.15)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                         border: isSelected
                             ? Border.all(
-                                color: AppColors.gold.withValues(alpha: 0.3),
+                                color: AppColors.accent(context)
+                                    .withValues(alpha: 0.3),
                                 width: 1,
                               )
                             : null,
@@ -119,7 +107,6 @@ class LanguageSelectorCard extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Flag emoji as visual indicator
                           Text(
                             locale == AppLocale.en ? '🇺🇸' : '🇻🇳',
                             style: const TextStyle(fontSize: 16),
@@ -130,8 +117,8 @@ class LanguageSelectorCard extends StatelessWidget {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: isSelected
-                                  ? AppColors.gold
-                                  : Colors.white.withValues(alpha: 0.5),
+                                  ? AppColors.accent(context)
+                                  : AppColors.textTertiaryC(context),
                               fontSize: 13,
                               fontWeight: isSelected
                                   ? FontWeight.w600

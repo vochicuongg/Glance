@@ -9,6 +9,8 @@ import '../../../core/services/glance_channel_service.dart';
 import '../widgets/shield_status_card.dart';
 import '../widgets/sensitivity_slider_card.dart';
 import '../widgets/calibrate_card.dart';
+import '../widgets/intensity_slider_card.dart';
+import '../widgets/tolerance_slider_card.dart';
 import '../widgets/overlay_mode_card.dart';
 import 'settings_screen.dart';
 import 'targeted_area_editor.dart';
@@ -43,6 +45,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _isServiceActive = false;
   bool _isCalibrated = false;
   double _sensitivity = 0.5; // Default: Medium
+  double _overlayIntensity = 0.8; // Default: 80% vault density
+  double _tolerance = 5.0; // Default: 5° hysteresis dead zone
   bool _isTargetedMode = false; // false = fullscreen, true = targeted
 
   // ── Service ─────────────────────────────────────────────────────────────
@@ -118,6 +122,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       if (value) {
         // Pass localized notification strings so the foreground
         // notification displays in the user's current language.
+        if (!mounted) return;
         final strings = LocaleProvider.stringsOf(context);
         await _channelService.startService(
           notificationTitle: strings.notificationTitle,
@@ -168,6 +173,38 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _handleSensitivityChangeEnd(double value) async {
     try {
       await _channelService.setSensitivity(value);
+    } on GlanceServiceException catch (e) {
+      if (mounted) {
+        _showSnackBar(e.message);
+      }
+    }
+  }
+
+  /// Update overlay intensity slider value (UI only — continuous drag).
+  void _handleIntensityChanged(double value) {
+    setState(() => _overlayIntensity = value);
+  }
+
+  /// Send final intensity value to native service (on drag end).
+  Future<void> _handleIntensityChangeEnd(double value) async {
+    try {
+      await _channelService.setIntensity(value);
+    } on GlanceServiceException catch (e) {
+      if (mounted) {
+        _showSnackBar(e.message);
+      }
+    }
+  }
+
+  /// Update tolerance slider value (UI only — continuous drag).
+  void _handleToleranceChanged(double value) {
+    setState(() => _tolerance = value);
+  }
+
+  /// Send final tolerance value to native service (on drag end).
+  Future<void> _handleToleranceChangeEnd(double value) async {
+    try {
+      await _channelService.setTolerance(value);
     } on GlanceServiceException catch (e) {
       if (mounted) {
         _showSnackBar(e.message);
@@ -362,7 +399,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF000000),
+      backgroundColor: AppColors.background(context),
       body: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
@@ -370,7 +407,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             // ── App Bar ─────────────────────────────────────────────────────
             SliverAppBar(
               pinned: true,
-              backgroundColor: Colors.black,
+              backgroundColor: AppColors.background(context),
               surfaceTintColor: Colors.transparent,
               expandedHeight: 64,
               title: Row(
@@ -411,9 +448,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     );
                   },
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.settings_rounded,
-                    color: AppColors.textTertiary,
+                    color: AppColors.textTertiaryC(context),
                     size: 22,
                   ),
                 ),
@@ -451,7 +488,27 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                   const SizedBox(height: 16),
 
-                  // 4. Coverage Mode Card (Fullscreen / Targeted) — ABOVE calibration
+                  // 4. Intensity Slider Card (Vault Density)
+                  IntensitySliderCard(
+                    value: _overlayIntensity,
+                    isServiceActive: _isServiceActive,
+                    onChanged: _handleIntensityChanged,
+                    onChangeEnd: _handleIntensityChangeEnd,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 4b. Tolerance Slider Card (Flicker Guard / Vùng chấp nhận lệch)
+                  ToleranceSliderCard(
+                    value: _tolerance,
+                    isServiceActive: _isServiceActive,
+                    onChanged: _handleToleranceChanged,
+                    onChangeEnd: _handleToleranceChangeEnd,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 5. Coverage Mode Card (Fullscreen / Targeted) — ABOVE calibration
                   OverlayModeCard(
                     isServiceActive: _isServiceActive,
                     isTargetedMode: _isTargetedMode,
@@ -549,9 +606,9 @@ class _DashboardScreenState extends State<DashboardScreen>
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.darkCharcoal,
+          color: AppColors.cardSurface(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.borderDark, width: 0.5),
+          border: Border.all(color: AppColors.border(context), width: 0.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -589,8 +646,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: AppColors.textSecondaryC(context),
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0.3,
@@ -614,7 +671,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           child: Container(
             height: 6,
             width: double.infinity,
-            color: AppColors.surfaceDark,
+            color: AppColors.surface(context),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final totalWidth = constraints.maxWidth;
@@ -633,7 +690,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       bottom: 0,
                       width: 1,
                       child: Container(
-                        color: AppColors.borderDark,
+                        color: AppColors.border(context),
                       ),
                     ),
                     // Animated Gold Bar
@@ -667,7 +724,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Column(
       children: [
         Divider(
-          color: AppColors.borderDark.withValues(alpha: 0.5),
+          color: AppColors.border(context).withValues(alpha: 0.5),
           height: 1,
         ),
         const SizedBox(height: 16),
@@ -677,13 +734,13 @@ class _DashboardScreenState extends State<DashboardScreen>
             Icon(
               Icons.lock_outline_rounded,
               size: 14,
-              color: AppColors.textTertiary.withValues(alpha: 0.6),
+              color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
             ),
             const SizedBox(width: 6),
             Text(
               strings.footerText,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textTertiary.withValues(alpha: 0.6),
+                    color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
                     fontSize: 11,
                   ),
             ),
