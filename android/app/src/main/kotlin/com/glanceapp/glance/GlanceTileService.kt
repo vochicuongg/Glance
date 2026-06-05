@@ -76,6 +76,11 @@ class GlanceTileService : TileService() {
         Log.d(TAG, "Tile UI updated IMMEDIATELY — new state=${if (tile.state == Tile.STATE_ACTIVE) "ACTIVE" else "INACTIVE"}")
 
         // ── STEP 2: Start or stop the service ──────────────────────────────
+        // NOTE: No need to read SharedPreferences or pass opacity/tolerance
+        // via Intent extras. GlanceOverlayService.onStartCommand() now reads
+        // its own settings directly from SharedPreferences (single source of
+        // truth). This eliminates the fragile Intent-extras pipeline that
+        // caused "settings not applied" bugs when the service was already running.
         val intent = Intent(this, GlanceOverlayService::class.java).apply {
             putExtra("mode", "fullscreen")
             putExtra("notificationTitle", "Privacy Display")

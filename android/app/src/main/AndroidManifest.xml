@@ -38,10 +38,11 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize"
             android:resizeableActivity="true">
-            <!-- Samsung Z Flip5 Cover Screen: allow showWhenLocked -->
-            <meta-data
-                android:name="com.samsung.android.activity.showWhenLocked"
-                android:value="true" />
+            <!-- NOTE: Samsung showWhenLocked meta-data REMOVED (Task 3).
+                 Only the overlay (GlanceOverlayService) should show on the
+                 lock screen via FLAG_SHOW_WHEN_LOCKED on its WindowManager
+                 params. The Flutter Activity must NOT appear over the lock
+                 screen — that caused the app UI to display on top of it. -->
             <!-- TransparentTheme makes the Activity window translucent so
                  the TargetedAreaEditor can "see through" to the home screen
                  via a cut-out hole in the ScrimPainter overlay.

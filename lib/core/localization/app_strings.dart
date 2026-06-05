@@ -131,6 +131,9 @@ class LocalizedStrings {
   final String notificationTitle;
   final String notificationText;
 
+  // ── UX Warning (Overlay Touch / Clickjacking) ──────────────────────
+  final String overlayTouchWarning;
+
   const LocalizedStrings({
     required this.protectionActive,
     required this.protectionDisabled,
@@ -187,6 +190,7 @@ class LocalizedStrings {
     required this.darkMode,
     required this.notificationTitle,
     required this.notificationText,
+    required this.overlayTouchWarning,
   });
 }
 
@@ -289,6 +293,13 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     // Notification (Native Service)
     notificationTitle: 'Glance Active',
     notificationText: 'Your screen is being protected',
+
+    // UX Warning (Overlay Touch / Clickjacking)
+    overlayTouchWarning:
+        'Security note: The privacy overlay may temporarily disable '
+        'touch on apps like Google Play or Banking. Please quickly '
+        'toggle it off via the notification bar (Quick Settings) '
+        'when needed.',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -383,6 +394,13 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     // Thông báo (Dịch vụ gốc)
     notificationTitle: 'Glance đang hoạt động',
     notificationText: 'Màn hình của bạn đang được bảo vệ',
+
+    // Cảnh báo UX (Chống chạm chồng lớp phủ)
+    overlayTouchWarning:
+        'Lưu ý bảo mật: Lớp che phủ có thể làm vô hiệu hóa cảm ứng '
+        'tạm thời trên các ứng dụng như Google Play, Ngân hàng. '
+        'Vui lòng tắt/bật nhanh qua thanh thông báo (Quick Settings) '
+        'khi cần thao tác.',
   ),
 };
 

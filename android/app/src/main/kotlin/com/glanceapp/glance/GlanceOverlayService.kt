@@ -270,7 +270,8 @@ class GlanceOverlayService : Service(), SensorEventListener {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
-                    Log.d(TAG, "SCREEN_OFF → pausing sensors & animator")
+                    // Tắt màn hình: Ngắt kết nối sensor hoàn toàn để tiết kiệm pin
+                    Log.d(TAG, "SCREEN_OFF → unregistering sensors completely & cancelling animator")
                     unregisterSensors()
                     cancelAnimator()
                     // Reset alpha to 0 (transparent) — no overlay when screen off
@@ -282,18 +283,22 @@ class GlanceOverlayService : Service(), SensorEventListener {
                 }
 
                 Intent.ACTION_SCREEN_ON -> {
-                    Log.d(TAG, "SCREEN_ON → resuming sensors")
-                    registerSensors()
+                    // Sáng màn hình: Hard Reset sensor
+                    // Force unregister first (clear any stale/deep-sleep state),
+                    // then re-register fresh — prevents "rớt rèm" (curtain drop)
+                    // caused by sensor returning stale data after deep sleep.
+                    Log.d(TAG, "SCREEN_ON → Hard Reset sensors (unregister + re-register)")
+                    unregisterSensors()  // Force clear stale sensor state
+                    registerSensors()    // Fresh registration from scratch
                 }
 
                 Intent.ACTION_USER_PRESENT -> {
-                    // User has unlocked the device — ensure sensors are running
-                    // This handles the case where SCREEN_ON alone wasn't enough
-                    // (some OEMs delay sensor re-registration until unlock)
-                    Log.d(TAG, "USER_PRESENT → ensuring sensors are active")
-                    if (!sensorsRegistered) {
-                        registerSensors()
-                    }
+                    // User has unlocked the device — Hard Reset again
+                    // Some OEMs (Samsung, Xiaomi) delay sensor wake until unlock.
+                    // Double-reset ensures sensor is truly alive after unlock.
+                    Log.d(TAG, "USER_PRESENT → Hard Reset sensors (ensuring fresh connection)")
+                    unregisterSensors()  // Force clear any stale state from lock screen
+                    registerSensors()    // Fresh registration post-unlock
                 }
             }
         }
@@ -309,12 +314,51 @@ class GlanceOverlayService : Service(), SensorEventListener {
     private var notificationTitle: String = "Glance Active"
     private var notificationText: String = "Your screen is being protected"
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  SETTINGS PERSISTENCE — Single Source of Truth (SharedPreferences)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Reads overlay settings from native SharedPreferences.
+     *
+     * Called in BOTH onCreate() AND onStartCommand() to ensure:
+     *   • Fresh start: settings are loaded before any sensor processing
+     *   • START_STICKY restart: after system kills & revives the Service,
+     *     it recovers user settings instead of using field defaults
+     *   • Reload signal: when Flutter saves new settings via saveSettingsToNative
+     *
+     * This is the KEY fix for "lost memory on kill app" — the Service
+     * always reads its config from persistent storage, never relying
+     * solely on Intent extras or in-memory field initializers.
+     */
+    private fun loadSettingsFromPrefs() {
+        val prefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
+        val savedOpacity = prefs.getFloat("opacity", 0.8f).coerceIn(0.1f, 1.0f)
+        val savedTolerance = prefs.getFloat("tolerance", DEFAULT_TOLERANCE_ANGLE).coerceIn(2.0f, 40.0f)
+
+        // Only update + log if values actually changed (avoid noisy logs)
+        if (savedOpacity != overlayIntensity || savedTolerance != toleranceAngle) {
+            overlayIntensity = savedOpacity
+            toleranceAngle = savedTolerance
+            Log.d(TAG, "Settings loaded from SharedPreferences: opacity=$overlayIntensity, tolerance=$toleranceAngle°")
+
+            // Re-apply overlay alpha immediately with new intensity ceiling
+            val clampedAlpha = targetAlpha.coerceAtMost(overlayIntensity)
+            targetAlpha = clampedAlpha
+            currentAlpha = clampedAlpha
+            overlayView?.post { applyAlphaToOverlay(clampedAlpha) }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service onCreate (v3.0 — Sensor Fusion + Choreographer)")
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+        // Load user settings BEFORE creating overlay (so intensity is correct from frame 1)
+        loadSettingsFromPrefs()
 
         createOverlayView()
         registerSensors()
@@ -329,6 +373,17 @@ class GlanceOverlayService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 1: Always reload settings from SharedPreferences
+        // ══════════════════════════════════════════════════════════════════
+        // Single source of truth — works for all start scenarios:
+        //   • Flutter UI, Quick Settings Tile, reload signal, START_STICKY restart
+        loadSettingsFromPrefs()
+
+        // ══════════════════════════════════════════════════════════════════
+        // STEP 2: Handle Intent-specific actions (calibrate, sensitivity, etc.)
+        // ══════════════════════════════════════════════════════════════════
+
         // ── Extract localized notification strings if provided ────────────
         // These are passed from Flutter via the startService method channel
         // on the very first start intent (no action set).
@@ -373,6 +428,9 @@ class GlanceOverlayService : Service(), SensorEventListener {
             }
 
             ACTION_SET_INTENSITY -> {
+                // Intent-based intensity update (from Flutter real-time slider)
+                // Also persisted via saveSettingsToNative, but this provides
+                // immediate in-session updates without waiting for prefs reload.
                 val intensity = intent.getFloatExtra(EXTRA_INTENSITY, 0.8f)
                     .coerceIn(0.1f, 1.0f)
                 overlayIntensity = intensity
@@ -381,17 +439,18 @@ class GlanceOverlayService : Service(), SensorEventListener {
                 targetAlpha = clampedAlpha
                 currentAlpha = clampedAlpha
                 overlayView?.post { applyAlphaToOverlay(clampedAlpha) }
-                Log.d(TAG, "Intensity → $overlayIntensity (vault density updated)")
+                Log.d(TAG, "Intensity → $overlayIntensity (vault density updated via Intent)")
             }
 
             ACTION_SET_TOLERANCE -> {
+                // Intent-based tolerance update (from Flutter real-time slider)
                 val tolerance = intent.getFloatExtra(EXTRA_TOLERANCE, DEFAULT_TOLERANCE_ANGLE)
                     .coerceIn(2.0f, 40.0f)
                 toleranceAngle = tolerance
-                Log.d(TAG, "Tolerance → $toleranceAngle° (hysteresis dead zone updated)")
+                Log.d(TAG, "Tolerance → $toleranceAngle° (updated via Intent)")
             }
 
-            // null action = initial start — handle mode + rebuild notification
+            // null action = initial start or reload signal
             null -> {
                 // ── Extract requested overlay mode from Intent ─────────────
                 // When started from Quick Settings Tile, the intent carries
@@ -412,6 +471,10 @@ class GlanceOverlayService : Service(), SensorEventListener {
                     pendingAutoCalibrate = true
                     Log.d(TAG, "Auto-calibrate requested — waiting for first sensor frame")
                 }
+
+                // NOTE: opacity & tolerance are now ALWAYS loaded from
+                // SharedPreferences at the top of onStartCommand (STEP 1).
+                // No need to extract them from Intent extras here.
 
                 // Re-post the notification with updated localized text
                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

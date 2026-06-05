@@ -1,75 +1,48 @@
-### Nhiệm vụ 1: Fix lỗi rớt Rèm khi Khóa màn hình (Sửa Kotlin)
-Cần đăng ký `BroadcastReceiver` để tự động kích hoạt lại Sensor khi màn hình sáng.
-* **Vị trí (`GlanceOverlayService.kt`):**
-  * Đảm bảo hàm `onStartCommand` trả về `START_STICKY`.
-  * Khai báo một `BroadcastReceiver`:
+### Nhiệm vụ 1: Dứt điểm lỗi Mất trí nhớ khi Kill App (Sửa Kotlin & Dart)
+* **Vị trí 1 (`GlanceOverlayService.kt`):**
+  Tạo một hàm đọc cấu hình riêng biệt. Gọi hàm này ở **cả `onCreate()` và dòng đầu tiên của `onStartCommand()`** để đảm bảo dù Service bị hệ thống kill và hồi sinh (START_STICKY), nó vẫn tự biết tìm lại trí nhớ.
   ```kotlin
-  private val screenStateReceiver = object : android.content.BroadcastReceiver() {
-      override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
-          when (intent.action) {
-              android.content.Intent.ACTION_SCREEN_OFF -> {
-                  // Màn hình tắt -> Dừng đọc sensor để tiết kiệm pin
-                  sensorManager?.unregisterListener(this@GlanceOverlayService)
-              }
-              android.content.Intent.ACTION_SCREEN_ON, 
-              android.content.Intent.ACTION_USER_PRESENT -> {
-                  // Màn hình sáng -> Kích hoạt ngay sensor lại
-                  val sensor = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)
-                  sensorManager?.registerListener(this@GlanceOverlayService, sensor, android.hardware.SensorManager.SENSOR_DELAY_GAME)
-              }
-          }
-      }
+  private fun loadSettingsFromPrefs() {
+      val prefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
+      this.currentOpacity = prefs.getFloat("opacity", 1.0f).toDouble()
+      this.toleranceAngle = prefs.getFloat("tolerance", 5.0f).toFloat()
+      // Cập nhật lại UI overlay ngay lập tức nếu cần
+      updateOverlayAlpha() 
   }
 
+* **Vị trí 2 (`lib/.../dashboard_screen.dart`):**
+Kiểm tra lại hàm `initState()`. NẾU đang gọi `saveSettingsToNative` ở đây với giá trị mặc định, HÃY XÓA NÓ ĐI. Chỉ gọi hàm lưu xuống Native khi người dùng **THỰC SỰ** kéo thanh Slider để tránh ghi đè rác lúc app bị khởi động ngầm.
 
-* Trong `onCreate()`, đăng ký Receiver:
-
-```kotlin
-val filter = android.content.IntentFilter().apply {
-    addAction(android.content.Intent.ACTION_SCREEN_OFF)
-    addAction(android.content.Intent.ACTION_SCREEN_ON)
-    addAction(android.content.Intent.ACTION_USER_PRESENT)
-}
-registerReceiver(screenStateReceiver, filter)
-
-```
-
-* Trong `onDestroy()`, nhớ gọi `unregisterReceiver(screenStateReceiver)`.
-
-### Nhiệm vụ 2: Tăng cường độ đen (+20%) (Sửa Kotlin)
+### Nhiệm vụ 2: Hard Reset Sensor chống rớt rèm (Sửa Kotlin)
 
 * **Vị trí (`GlanceOverlayService.kt`):**
-* Tìm đoạn code đang tính toán `alpha` (màu của overlayView).
-* Tăng độ đậm lên 20% bằng cách nhân hệ số (hoặc sửa công thức mapping độ lệch), ví dụ:
-
+Cập nhật lại `BroadcastReceiver` để đảm bảo Sensor bị ngắt điện hoàn toàn lúc tắt màn hình, và được cắm điện kết nối lại từ đầu lúc mở màn hình.
 ```kotlin
-// Tăng cường độ alpha thêm 20% nhưng không vượt quá 255
-val boostedAlpha = (calculatedAlpha * 1.2f).toInt().coerceIn(0, 255)
-overlayView.setBackgroundColor(android.graphics.Color.argb(boostedAlpha, 0, 0, 0))
+private val screenStateReceiver = object : android.content.BroadcastReceiver() {
+    override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+        when (intent.action) {
+            android.content.Intent.ACTION_SCREEN_OFF -> {
+                // Tắt màn hình: Ngắt kết nối sensor hoàn toàn
+                sensorManager?.unregisterListener(this@GlanceOverlayService)
+            }
+            android.content.Intent.ACTION_SCREEN_ON,
+            android.content.Intent.ACTION_USER_PRESENT -> {
+                // Sáng màn hình: Hard Reset (Ngắt hẳn cái cũ rồi mới đăng ký cái mới)
+                sensorManager?.unregisterListener(this@GlanceOverlayService) 
+                val sensor = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)
+                sensorManager?.registerListener(this@GlanceOverlayService, sensor, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+            }
+        }
+    }
+}
+// Đảm bảo registerReceiver trong onCreate và unregisterReceiver trong onDestroy.
 
 ```
+### Nhiệm vụ 3: Gỡ bỏ Giao diện khỏi Màn hình khóa (Sửa Manifest & MainActivity)
 
-### Nhiệm vụ 3: Đồng bộ Theme Hệ thống & Fix Card Color (Sửa Dart)
+CHỈ CÓ rèm che (Overlay) mới được đè lên màn hình khóa, giao diện App (Flutter) thì KHÔNG.
 
-* **Vị trí 1 (`lib/main.dart` hoặc nơi khai báo MaterialApp):**
-* Sửa thuộc tính `themeMode` mặc định thành `ThemeMode.system` để nó lắng nghe thiết bị. (Nếu dùng `ThemeProvider`, hãy đảm bảo nó đọc giá trị `SchedulerBinding.instance.window.platformBrightness` lúc khởi tạo).
-
-* **Vị trí 2 (Các file định nghĩa Theme/Color):**
-* `ThemeData.light()`: Đặt `scaffoldBackgroundColor` là `Colors.grey[100]`, `cardColor` là `Colors.white`. Text màu `Colors.black87`.
-* `ThemeData.dark()`: Đặt `scaffoldBackgroundColor` là `Colors.black`, `cardColor` là `Color(0xFF1E1E1E)`. Text màu `Colors.white`.
-
-* **Vị trí 3 (Các widget UI: SliderCard, StatusCard):**
-* XÓA TOÀN BỘ các mã màu cứng (hardcode) như `Colors.grey[900]` trong thuộc tính `color` của `Container` hay `Card`.
-* Thay bằng: `color: Theme.of(context).cardColor`.
-* Sửa màu text thành: `color: Theme.of(context).colorScheme.onSurface`.
-
-### Nhiệm vụ 4: Tăng biên độ Vùng trễ Tolerance lên 40° (Sửa Dart)
-
-* **Vị trí (`lib/.../tolerance_slider_card.dart` hoặc widget tương ứng):**
-* Tìm thuộc tính `max` của Slider vùng lệch, đổi từ `20.0` thành `40.0`.
-* Đảm bảo giá trị truyền xuống MethodChannel không bị giới hạn ở 20.
-
-### Yêu cầu chung:
-* Chạy `flutter analyze` để check lỗi cú pháp.
-* Re-build app bằng `flutter clean` và `flutter run` để nạp mã Kotlin mới vào thiết bị.
-
+* **Vị trí 1 (`android/app/src/main/AndroidManifest.xml`):**
+Tìm thẻ `<activity android:name=".MainActivity" ...>`. Xóa ngay thuộc tính `android:showWhenLocked="true"` hoặc `android:turnScreenOn="true"` nếu có.
+* **Vị trí 2 (`MainActivity.kt`):**
+Trong hàm `onCreate()`, TÌM VÀ XÓA hàm `setShowWhenLocked(true)` hoặc lệnh cấp cờ `WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED` cho Activity.

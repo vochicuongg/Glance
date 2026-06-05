@@ -59,6 +59,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _syncServiceState();
+
+    // NOTE: Do NOT call saveSettingsToNative() here with default field values!
+    // That would overwrite the user's real settings in SharedPreferences with
+    // hardcoded defaults (opacity=0.8, tolerance=5.0) every time the app
+    // starts — including background restarts after a kill.
+    // The native Service reads its own config from SharedPreferences via
+    // loadSettingsFromPrefs(), so it's always in sync. Settings are only
+    // written when the user ACTUALLY drags a slider (onChangeEnd handlers).
   }
 
   @override
@@ -186,9 +194,13 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   /// Send final intensity value to native service (on drag end).
+  /// Also persists to native SharedPreferences for Quick Settings Tile.
   Future<void> _handleIntensityChangeEnd(double value) async {
     try {
       await _channelService.setIntensity(value);
+      // Persist to native SharedPreferences so Quick Settings Tile
+      // can read the user's configured opacity when launching the service.
+      GlanceChannelService.saveSettingsToNative(value, _tolerance);
     } on GlanceServiceException catch (e) {
       if (mounted) {
         _showSnackBar(e.message);
@@ -202,9 +214,13 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   /// Send final tolerance value to native service (on drag end).
+  /// Also persists to native SharedPreferences for Quick Settings Tile.
   Future<void> _handleToleranceChangeEnd(double value) async {
     try {
       await _channelService.setTolerance(value);
+      // Persist to native SharedPreferences so Quick Settings Tile
+      // can read the user's configured tolerance when launching the service.
+      GlanceChannelService.saveSettingsToNative(_overlayIntensity, value);
     } on GlanceServiceException catch (e) {
       if (mounted) {
         _showSnackBar(e.message);
@@ -504,6 +520,43 @@ class _DashboardScreenState extends State<DashboardScreen>
                     isServiceActive: _isServiceActive,
                     onChanged: _handleToleranceChanged,
                     onChangeEnd: _handleToleranceChangeEnd,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── UX Warning: Clickjacking Protection notice ──────────
+                  // Android's OS-level Clickjacking Protection drops touch
+                  // events on windows obscured by overlays. This is a system
+                  // security feature that CANNOT be bypassed. Users must
+                  // toggle the overlay off via Quick Settings when interacting
+                  // with sensitive apps like Google Play or banking apps.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Icon(
+                            Icons.info_outline_rounded,
+                            size: 14,
+                            color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            LocaleProvider.stringsOf(context).overlayTouchWarning,
+                            style: TextStyle(
+                              color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 16),

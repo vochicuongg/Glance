@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
@@ -304,6 +305,27 @@ class GlanceChannelService {
       throw GlanceServiceException(
         'Failed to set tolerance: ${e.message}',
       );
+    }
+  }
+
+  /// Saves the current opacity and tolerance settings to native SharedPreferences.
+  ///
+  /// This allows the Quick Settings Tile (GlanceTileService) to read the
+  /// user's configured values when starting the overlay service without
+  /// the Flutter UI being open.
+  ///
+  /// Called whenever the user changes the Intensity or Tolerance sliders.
+  static Future<void> saveSettingsToNative(double opacity, double tolerance) async {
+    try {
+      await _channel.invokeMethod('saveSettingsToNative', {
+        'opacity': opacity,
+        'tolerance': tolerance,
+      });
+    } catch (e) {
+      // Silently ignore — non-critical persistence. The service will
+      // still work with its in-memory values; only Tile-launched sessions
+      // might use defaults instead of user-configured values.
+      debugPrint("Error syncing settings to native: $e");
     }
   }
 

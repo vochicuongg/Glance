@@ -1,5 +1,6 @@
 package com.glanceapp.glance
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -101,6 +102,31 @@ class MainActivity : FlutterActivity() {
                 }
                 "isServiceRunning" -> {
                     result.success(GlanceOverlayService.isRunning)
+                }
+                "saveSettingsToNative" -> {
+                    val opacity = call.argument<Double>("opacity") ?: 1.0
+                    val tolerance = call.argument<Double>("tolerance") ?: 5.0
+
+                    val prefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
+                    prefs.edit().apply {
+                        putFloat("opacity", opacity.toFloat())
+                        putFloat("tolerance", tolerance.toFloat())
+                        apply()
+                    }
+                    Log.d(TAG, "Settings saved to native: opacity=$opacity, tolerance=$tolerance")
+
+                    // ── Signal running Service to reload settings immediately ──
+                    // Sending a plain Intent (no action) triggers onStartCommand,
+                    // which now reads SharedPreferences at the top (STEP 1).
+                    // This ensures the overlay updates in real-time when the user
+                    // adjusts sliders, even if the Service was started from the Tile.
+                    if (GlanceOverlayService.isRunning) {
+                        val updateIntent = Intent(this, GlanceOverlayService::class.java)
+                        startService(updateIntent)
+                        Log.d(TAG, "Reload signal sent to running Service")
+                    }
+
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }
