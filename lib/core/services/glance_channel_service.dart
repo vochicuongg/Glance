@@ -308,6 +308,29 @@ class GlanceChannelService {
     }
   }
 
+  /// Reads saved opacity & tolerance from native SharedPreferences.
+  ///
+  /// Used on app startup to restore the Flutter UI sliders to the values
+  /// the user last configured, instead of showing hardcoded defaults.
+  /// Falls back to safe defaults (0.8 / 5.0) if the read fails.
+  static Future<Map<String, dynamic>> getSettingsFromNative() async {
+    try {
+      final Map<dynamic, dynamic>? result =
+          await _channel.invokeMethod('getSettingsFromNative');
+      if (result != null) {
+        return {
+          'opacity': (result['opacity'] as num).toDouble(),
+          'tolerance': (result['tolerance'] as num).toDouble(),
+          'sensitivity': (result['sensitivity'] as num).toDouble(),
+          'isCalibrated': result['isCalibrated'] == true,
+        };
+      }
+    } catch (e) {
+      debugPrint("Error reading settings from native: $e");
+    }
+    return {'opacity': 0.8, 'tolerance': 5.0, 'sensitivity': 0.5, 'isCalibrated': false};
+  }
+
   /// Saves the current opacity and tolerance settings to native SharedPreferences.
   ///
   /// This allows the Quick Settings Tile (GlanceTileService) to read the
@@ -315,11 +338,12 @@ class GlanceChannelService {
   /// the Flutter UI being open.
   ///
   /// Called whenever the user changes the Intensity or Tolerance sliders.
-  static Future<void> saveSettingsToNative(double opacity, double tolerance) async {
+  static Future<void> saveSettingsToNative(double opacity, double tolerance, double sensitivity) async {
     try {
       await _channel.invokeMethod('saveSettingsToNative', {
         'opacity': opacity,
         'tolerance': tolerance,
+        'sensitivity': sensitivity,
       });
     } catch (e) {
       // Silently ignore — non-critical persistence. The service will

@@ -103,17 +103,34 @@ class MainActivity : FlutterActivity() {
                 "isServiceRunning" -> {
                     result.success(GlanceOverlayService.isRunning)
                 }
+                "getSettingsFromNative" -> {
+                    val prefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
+                    val opacity = prefs.getFloat("opacity", 0.8f).toDouble()
+                    val tolerance = prefs.getFloat("tolerance", 5.0f).toDouble()
+                    val sensitivity = prefs.getFloat("sensitivity", 0.5f).toDouble()
+                    val isCalibrated = GlanceOverlayService.isCalibrated
+
+                    result.success(mapOf(
+                        "opacity" to opacity,
+                        "tolerance" to tolerance,
+                        "sensitivity" to sensitivity,
+                        "isCalibrated" to isCalibrated
+                    ))
+                    Log.d(TAG, "Settings read from native: opacity=$opacity, tolerance=$tolerance, sensitivity=$sensitivity, isCalibrated=$isCalibrated")
+                }
                 "saveSettingsToNative" -> {
                     val opacity = call.argument<Double>("opacity") ?: 1.0
                     val tolerance = call.argument<Double>("tolerance") ?: 5.0
+                    val sensitivity = call.argument<Double>("sensitivity") ?: 0.5
 
                     val prefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
                     prefs.edit().apply {
                         putFloat("opacity", opacity.toFloat())
                         putFloat("tolerance", tolerance.toFloat())
+                        putFloat("sensitivity", sensitivity.toFloat())
                         apply()
                     }
-                    Log.d(TAG, "Settings saved to native: opacity=$opacity, tolerance=$tolerance")
+                    Log.d(TAG, "Settings saved to native: opacity=$opacity, tolerance=$tolerance, sensitivity=$sensitivity")
 
                     // ── Signal running Service to reload settings immediately ──
                     // Sending a plain Intent (no action) triggers onStartCommand,

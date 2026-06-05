@@ -59,14 +59,27 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _syncServiceState();
+    _loadSavedSettings(); // Restore sliders from Native SharedPreferences
+  }
 
-    // NOTE: Do NOT call saveSettingsToNative() here with default field values!
-    // That would overwrite the user's real settings in SharedPreferences with
-    // hardcoded defaults (opacity=0.8, tolerance=5.0) every time the app
-    // starts — including background restarts after a kill.
-    // The native Service reads its own config from SharedPreferences via
-    // loadSettingsFromPrefs(), so it's always in sync. Settings are only
-    // written when the user ACTUALLY drags a slider (onChangeEnd handlers).
+  /// Reads the user's last-saved opacity & tolerance from Native
+  /// SharedPreferences and applies them to the UI slider state.
+  ///
+  /// This prevents the "lost memory" bug where killing the app caused
+  /// sliders to reset to hardcoded defaults (0.8 / 5.0).
+  Future<void> _loadSavedSettings() async {
+    final settings = await GlanceChannelService.getSettingsFromNative();
+    if (mounted) {
+      setState(() {
+        _overlayIntensity = settings['opacity'] ?? 0.8;
+        _tolerance = settings['tolerance'] ?? 5.0;
+        _sensitivity = settings['sensitivity'] ?? 0.5;
+        // Only sync isCalibrated from Native if Service IS RUNNING
+        if (_isServiceActive) {
+          _isCalibrated = settings['isCalibrated'] ?? false;
+        }
+      });
+    }
   }
 
   @override
@@ -181,6 +194,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _handleSensitivityChangeEnd(double value) async {
     try {
       await _channelService.setSensitivity(value);
+      GlanceChannelService.saveSettingsToNative(_overlayIntensity, _tolerance, value);
     } on GlanceServiceException catch (e) {
       if (mounted) {
         _showSnackBar(e.message);
@@ -200,7 +214,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       await _channelService.setIntensity(value);
       // Persist to native SharedPreferences so Quick Settings Tile
       // can read the user's configured opacity when launching the service.
-      GlanceChannelService.saveSettingsToNative(value, _tolerance);
+      GlanceChannelService.saveSettingsToNative(value, _tolerance, _sensitivity);
     } on GlanceServiceException catch (e) {
       if (mounted) {
         _showSnackBar(e.message);
@@ -220,7 +234,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       await _channelService.setTolerance(value);
       // Persist to native SharedPreferences so Quick Settings Tile
       // can read the user's configured tolerance when launching the service.
-      GlanceChannelService.saveSettingsToNative(_overlayIntensity, value);
+      GlanceChannelService.saveSettingsToNative(_overlayIntensity, value, _sensitivity);
     } on GlanceServiceException catch (e) {
       if (mounted) {
         _showSnackBar(e.message);

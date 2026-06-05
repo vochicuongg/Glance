@@ -165,6 +165,12 @@ class GlanceOverlayService : Service(), SensorEventListener {
         /// Throttle interval for sensor stream to Flutter (ms).
         /// 100ms = 10 updates/sec — smooth enough for UI bars, battery-friendly.
         private const val SENSOR_STREAM_INTERVAL_MS = 100L
+
+        /// Whether the user has explicitly calibrated a baseline.
+        /// Moved to companion object so MainActivity can read the real-time
+        /// calibration state and sync it back to Flutter UI.
+        @Volatile
+        var isCalibrated: Boolean = false
     }
 
     /// Timestamp of last sensor event sent to Flutter via EventChannel.
@@ -198,9 +204,6 @@ class GlanceOverlayService : Service(), SensorEventListener {
     /// Calibrated baseline angles. Default to 0 (device flat).
     private var baselinePitch: Float = 0f   // β₀
     private var baselineRoll: Float  = 0f   // γ₀
-
-    /// Whether the user has explicitly calibrated a baseline.
-    private var isCalibrated: Boolean = false
 
     /// Current max tolerance angle. Controlled by the sensitivity slider.
     private var maxTolerance: Float = DEFAULT_MAX_TOLERANCE
@@ -335,12 +338,15 @@ class GlanceOverlayService : Service(), SensorEventListener {
         val prefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
         val savedOpacity = prefs.getFloat("opacity", 0.8f).coerceIn(0.1f, 1.0f)
         val savedTolerance = prefs.getFloat("tolerance", DEFAULT_TOLERANCE_ANGLE).coerceIn(2.0f, 40.0f)
+        val savedSensitivity = prefs.getFloat("sensitivity", 0.5f).coerceIn(0f, 1f)
 
-        // Only update + log if values actually changed (avoid noisy logs)
-        if (savedOpacity != overlayIntensity || savedTolerance != toleranceAngle) {
+        val newMaxTolerance = MAX_TOLERANCE - (savedSensitivity * (MAX_TOLERANCE - MIN_TOLERANCE))
+
+        if (savedOpacity != overlayIntensity || savedTolerance != toleranceAngle || maxTolerance != newMaxTolerance) {
             overlayIntensity = savedOpacity
             toleranceAngle = savedTolerance
-            Log.d(TAG, "Settings loaded from SharedPreferences: opacity=$overlayIntensity, tolerance=$toleranceAngle°")
+            maxTolerance = newMaxTolerance
+            Log.d(TAG, "Settings loaded from SharedPreferences: opacity=$overlayIntensity, tolerance=$toleranceAngle°, sensitivity=$savedSensitivity, maxTolerance=$maxTolerance°")
 
             // Re-apply overlay alpha immediately with new intensity ceiling
             val clampedAlpha = targetAlpha.coerceAtMost(overlayIntensity)
