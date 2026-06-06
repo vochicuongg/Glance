@@ -128,6 +128,17 @@ class LocalizedStrings {
   // ── UX Warning (Overlay Touch / Clickjacking) ──────────────────────
   final String overlayTouchWarning;
 
+  // ── Permission / Onboarding Screen (Gatekeeper) ────────────────────
+  final String permAccessibilityTitle;
+  final String permAccessibilityDesc;
+  final String permAccessibilityButton;
+  final String permOverlayTitle;
+  final String permOverlayDesc;
+  final String permOverlayButton;
+  final String permStepOf;
+  final String permRefreshStatus;
+  final String permGrantRequired;
+
   const LocalizedStrings({
     required this.protectionActive,
     required this.protectionDisabled,
@@ -181,6 +192,15 @@ class LocalizedStrings {
     required this.notificationTitle,
     required this.notificationText,
     required this.overlayTouchWarning,
+    required this.permAccessibilityTitle,
+    required this.permAccessibilityDesc,
+    required this.permAccessibilityButton,
+    required this.permOverlayTitle,
+    required this.permOverlayDesc,
+    required this.permOverlayButton,
+    required this.permStepOf,
+    required this.permRefreshStatus,
+    required this.permGrantRequired,
   });
 }
 
@@ -284,6 +304,25 @@ const Map<AppLocale, LocalizedStrings> _strings = {
         'touch on apps like Google Play or Banking. Please quickly '
         'toggle it off via the notification bar (Quick Settings) '
         'when needed.',
+
+    // Permission / Onboarding Screen (Gatekeeper)
+    permAccessibilityTitle: 'Enable Accessibility Service',
+    permAccessibilityDesc:
+        'Glance requires the Accessibility Service to create a trusted '
+        'privacy overlay that protects your screen from prying eyes.\n\n'
+        'This permission allows Glance to draw a secure shield over '
+        'your display without affecting touch input.',
+    permAccessibilityButton: 'Open Accessibility Settings',
+    permOverlayTitle: 'Allow Display Over Other Apps',
+    permOverlayDesc:
+        'Glance needs the "Display over other apps" permission to '
+        'render the privacy shield on top of all applications.\n\n'
+        'Please grant this permission so Glance can protect your '
+        'screen content in real-time.',
+    permOverlayButton: 'Open Overlay Settings',
+    permStepOf: 'Step %d of %d',
+    permRefreshStatus: 'Already enabled? Continue',
+    permGrantRequired: 'Please grant all permissions to use this feature.',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -379,6 +418,25 @@ const Map<AppLocale, LocalizedStrings> _strings = {
         'tạm thời trên các ứng dụng như Google Play, Ngân hàng. '
         'Vui lòng tắt/bật nhanh qua thanh thông báo (Quick Settings) '
         'khi cần thao tác.',
+
+    // Quyền / Màn hình Onboarding (Gatekeeper)
+    permAccessibilityTitle: 'Bật Dịch vụ Trợ năng',
+    permAccessibilityDesc:
+        'Glance yêu cầu Dịch vụ Trợ năng để tạo lớp phủ bảo mật '
+        'đáng tin cậy, bảo vệ màn hình khỏi ánh mắt tò mò.\n\n'
+        'Quyền này cho phép Glance vẽ lá chắn bảo mật trên màn hình '
+        'mà không ảnh hưởng đến thao tác chạm.',
+    permAccessibilityButton: 'Mở Cài đặt Trợ năng',
+    permOverlayTitle: 'Cho phép Hiển thị trên ứng dụng khác',
+    permOverlayDesc:
+        'Glance cần quyền "Hiển thị trên ứng dụng khác" để hiển thị '
+        'lá chắn bảo mật trên tất cả ứng dụng.\n\n'
+        'Vui lòng cấp quyền này để Glance có thể bảo vệ nội dung '
+        'màn hình của bạn theo thời gian thực.',
+    permOverlayButton: 'Mở Cài đặt Hiển thị',
+    permStepOf: 'Bước %d / %d',
+    permRefreshStatus: 'Đã bật? Tiếp tục',
+    permGrantRequired: 'Vui lòng cấp đủ quyền để sử dụng tính năng.',
   ),
 };
 

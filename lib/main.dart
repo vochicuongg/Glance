@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
-import 'features/dashboard/screens/dashboard_screen.dart';
+import 'features/permissions/screens/permission_screen.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
 /// Glance — Main Entry Point
@@ -63,8 +63,9 @@ class GlanceApp extends StatelessWidget {
               darkTheme: AppTheme.darkTheme,
               themeMode: themeProvider.themeMode,
 
-              // Dashboard is the single home screen
-              home: const DashboardScreen(),
+              // PermissionScreen is the gatekeeper — checks permissions
+              // before allowing access to Dashboard
+              home: const PermissionScreen(),
             );
           },
         ),

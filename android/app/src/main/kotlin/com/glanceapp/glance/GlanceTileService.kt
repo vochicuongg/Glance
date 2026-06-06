@@ -1,31 +1,36 @@
 package com.glanceapp.glance
 
-import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
-import androidx.core.content.ContextCompat
 
 /// ─────────────────────────────────────────────────────────────────────────────
 /// GlanceTileService — Quick Settings Tile for Glance
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
 /// Adds a toggle tile to the Android Quick Settings panel (notification shade).
-/// Users can tap the tile to start/stop the GlanceOverlayService without
-/// opening the app.
+///
+/// Since GlanceOverlayService is now an AccessibilityService, it CANNOT be
+/// started/stopped via startService()/stopService(). Instead we use a
+/// "hibernate" pattern — the service stays alive but hides its overlay:
+///   • If accessibility is NOT enabled → opens Accessibility Settings
+///   • If accessibility IS enabled & running → sends ACTION_STOP_SERVICE
+///     broadcast to hibernate (removes overlay, pauses sensor)
+///   • If accessibility IS enabled & hibernated → sends ACTION_RESUME_SERVICE
+///     broadcast to wake up (re-registers sensor)
+///   • NEVER calls disableSelf() or stopService()
 ///
 /// Communication flow:
-///   • onClick() → instantly updates tile UI (0 delay), then starts/stops service
+///   • onClick() → instantly updates tile UI, then hibernates/resumes service
 ///   • onStartListening() → reads GlanceOverlayService.isRunning to sync tile state
 ///   • GlanceOverlayService calls TileService.requestListeningState() in
-///     onCreate/onDestroy to trigger onStartListening() for 2-way sync
+///     onServiceConnected/onDestroy/hibernate/resume to trigger onStartListening()
 ///
 /// Thread safety:
 ///   • GlanceOverlayService.isRunning is @Volatile — safe to read from
 ///     the TileService thread without synchronization
-///   • Tile.updateTile() is called on the TileService's thread
 /// ─────────────────────────────────────────────────────────────────────────────
 class GlanceTileService : TileService() {
 
@@ -58,60 +63,50 @@ class GlanceTileService : TileService() {
      * of the function BEFORE starting/stopping the service, so the user
      * gets instant visual feedback on tap.
      *
-     * If overlay permission is not granted, opens the permission settings
-     * instead of starting the service (to prevent crashes).
+     * Since GlanceOverlayService is an AccessibilityService:
+     *   • To START/RESUME: Send RESUME broadcast (or open Settings if not enabled)
+     *   • To STOP/HIBERNATE: Send STOP broadcast (hides overlay, pauses sensor)
+     *   • NEVER calls disableSelf() or stopService()
      */
     override fun onClick() {
         super.onClick()
         Log.d(TAG, "onClick — current isRunning=${GlanceOverlayService.isRunning}")
 
-        // ── STEP 1: Instantly toggle tile UI (0 delay) ─────────────────────
         val tile = qsTile ?: return
+
         if (GlanceOverlayService.isRunning) {
+            // ── HIBERNATE: Send broadcast to hide overlay & pause sensor ──
             tile.state = Tile.STATE_INACTIVE
-        } else {
-            tile.state = Tile.STATE_ACTIVE
-        }
-        tile.updateTile()
-        Log.d(TAG, "Tile UI updated IMMEDIATELY — new state=${if (tile.state == Tile.STATE_ACTIVE) "ACTIVE" else "INACTIVE"}")
+            tile.updateTile()
+            Log.d(TAG, "Tile UI updated IMMEDIATELY — INACTIVE")
 
-        // ── STEP 2: Start or stop the service ──────────────────────────────
-        // NOTE: No need to read SharedPreferences or pass opacity/tolerance
-        // via Intent extras. GlanceOverlayService.onStartCommand() now reads
-        // its own settings directly from SharedPreferences (single source of
-        // truth). This eliminates the fragile Intent-extras pipeline that
-        // caused "settings not applied" bugs when the service was already running.
-        val intent = Intent(this, GlanceOverlayService::class.java).apply {
-            putExtra("mode", "fullscreen")
-            putExtra("notificationTitle", "Privacy Display")
-            putExtra("notificationText", "Running from Quick Settings")
-            putExtra("autoCalibrate", true)
-        }
-
-        if (GlanceOverlayService.isRunning) {
-            // ── Stop the service ──────────────────────────────────────────
-            stopService(intent)
-            Log.d(TAG, "Service stop requested via Tile")
+            sendBroadcast(Intent(GlanceOverlayService.ACTION_STOP_SERVICE).apply {
+                setPackage(packageName)
+            })
+            Log.d(TAG, "Hibernate broadcast sent via Tile")
         } else {
-            // ── Start the service ─────────────────────────────────────────
-            // Check overlay permission first
-            if (!Settings.canDrawOverlays(this)) {
-                Log.w(TAG, "Overlay permission not granted — opening settings")
-                // Revert tile state since we can't start
+            // ── RESUME: Check if accessibility is enabled ─────────────────
+            if (GlanceOverlayService.isAccessibilityEnabled(this)) {
+                // Accessibility enabled — send RESUME broadcast to wake from hibernate
+                tile.state = Tile.STATE_ACTIVE
+                tile.updateTile()
+                Log.d(TAG, "Tile UI updated IMMEDIATELY — ACTIVE")
+
+                sendBroadcast(Intent(GlanceOverlayService.ACTION_RESUME_SERVICE).apply {
+                    setPackage(packageName)
+                })
+                Log.d(TAG, "Resume broadcast sent via Tile — waking shield from hibernate")
+            } else {
+                // Accessibility not enabled — guide user to settings
+                Log.w(TAG, "Accessibility not enabled — opening settings")
                 tile.state = Tile.STATE_INACTIVE
                 tile.updateTile()
-                val permIntent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    android.net.Uri.parse("package:$packageName")
-                ).apply {
+
+                val settingsIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                startActivityAndCollapse(permIntent)
-                return
+                startActivityAndCollapse(settingsIntent)
             }
-
-            ContextCompat.startForegroundService(this, intent)
-            Log.d(TAG, "Service start requested via Tile (fullscreen mode)")
         }
     }
 

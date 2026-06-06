@@ -11,6 +11,7 @@ import '../widgets/sensitivity_slider_card.dart';
 import '../widgets/calibrate_card.dart';
 import '../widgets/tolerance_slider_card.dart';
 import '../widgets/overlay_mode_card.dart';
+import '../../permissions/screens/permission_screen.dart';
 import 'settings_screen.dart';
 import 'targeted_area_editor.dart';
 
@@ -132,7 +133,42 @@ class _DashboardScreenState extends State<DashboardScreen>
   /// Uses optimistic UI update for snappy feel, then reverts if the
   /// native call fails. Special handling for PERMISSION_DENIED:
   /// shows a premium Dark/Gold dialog explaining the permission need.
+  ///
+  /// **Pre-flight check (v1.1):**
+  /// Before attempting to start the service, we proactively verify that
+  /// both Accessibility Service and Overlay (SYSTEM_ALERT_WINDOW) permissions
+  /// are still granted. If either is missing, the toggle is immediately
+  /// reverted and the user is redirected to PermissionScreen to re-grant.
+  /// This prevents the UX deadlock where lifecycle events fail to trigger
+  /// after the user revokes permissions from system Settings.
   Future<void> _handleToggleService(bool value) async {
+    // ── Pre-flight permission check (only when turning ON) ────────────
+    if (value) {
+      final accessibility =
+          await GlanceChannelService.isAccessibilityEnabled();
+      final overlay =
+          await GlanceChannelService.isOverlayPermissionGranted();
+
+      if (!accessibility || !overlay) {
+        // Ensure toggle stays OFF
+        setState(() => _isServiceActive = false);
+
+        if (!mounted) return;
+
+        // Show feedback SnackBar
+        final strings = LocaleProvider.stringsOf(context);
+        _showSnackBar(strings.permGrantRequired);
+
+        // Redirect to PermissionScreen to re-grant missing permissions
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const PermissionScreen(),
+          ),
+        );
+        return;
+      }
+    }
+
     // Optimistic UI update for snappy feel
     setState(() => _isServiceActive = value);
 

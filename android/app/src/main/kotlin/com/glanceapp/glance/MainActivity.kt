@@ -17,18 +17,18 @@ import io.flutter.plugin.common.MethodChannel
 /// MainActivity
 /// ─────────────────────────────────────────────────────────────────────────────
 /// Flutter host Activity that bridges Flutter UI commands to the native
-/// GlanceOverlayService via a MethodChannel.
+/// GlanceOverlayService (AccessibilityService) via MethodChannel + Broadcasts.
 ///
-/// Handles 6 commands from Flutter:
-///   • startService    — starts the overlay foreground service
-///   • stopService     — stops the overlay foreground service
-///   • calibrate       — tells the service to capture baseline angles (β₀, γ₀)
-///   • setSensitivity  — updates the tilt tolerance threshold in the service
-///   • setOverlayMode  — switches between fullscreen and targeted overlay
-///   • setTargetedArea — sends target area coordinates (physical px) to service
+/// Since the service is now an AccessibilityService, it CANNOT be started or
+/// stopped via startService()/stopService(). Instead we use a "hibernate"
+/// pattern — the service stays alive but hides its overlay and pauses sensors:
+///   • startService  → if accessibility enabled but hibernated, sends RESUME broadcast;
+///                      if not enabled, opens Accessibility Settings
+///   • stopService   → sends ACTION_STOP_SERVICE broadcast (hibernates: removes overlay,
+///                      pauses sensor — NEVER calls disableSelf() or stopService())
+///   • config updates → sent as broadcasts (BroadcastReceiver in the service)
 ///
-/// Also manages the SYSTEM_ALERT_WINDOW permission flow before starting
-/// the service, redirecting the user to Android Settings if needed.
+/// The sensor EventChannel pipeline remains unchanged.
 /// ─────────────────────────────────────────────────────────────────────────────
 class MainActivity : FlutterActivity() {
 
@@ -41,8 +41,8 @@ class MainActivity : FlutterActivity() {
         /// EventChannel name for real-time sensor data streaming to Flutter.
         private const val SENSOR_STREAM_CHANNEL = "com.glanceapp.glance/sensor_stream"
 
-        /// Request code for the overlay permission intent result.
-        private const val OVERLAY_PERMISSION_REQUEST = 1001
+        /// Request code for the accessibility settings intent result.
+        private const val ACCESSIBILITY_SETTINGS_REQUEST = 1002
     }
 
     override fun getBackgroundMode(): BackgroundMode {
@@ -52,7 +52,7 @@ class MainActivity : FlutterActivity() {
     private var methodChannel: MethodChannel? = null
     private var sensorEventChannel: EventChannel? = null
 
-    /// Pending MethodChannel result to resolve after permission grant/deny.
+    /// Pending MethodChannel result to resolve after accessibility grant.
     private var pendingResult: MethodChannel.Result? = null
 
     // ── Flutter Engine Configuration ──────────────────────────────────────
@@ -83,9 +83,6 @@ class MainActivity : FlutterActivity() {
                     handleSetOverlayMode(mode, result)
                 }
                 "setTargetedArea" -> {
-                    // Flutter sends coordinates in PHYSICAL PIXELS (already
-                    // multiplied by devicePixelRatio on the Dart side).
-                    // We read them as Int to match WindowManager.LayoutParams.
                     val x      = call.argument<Int>("x") ?: 0
                     val y      = call.argument<Int>("y") ?: 0
                     val width  = call.argument<Int>("width") ?: 0
@@ -102,6 +99,27 @@ class MainActivity : FlutterActivity() {
                 }
                 "isServiceRunning" -> {
                     result.success(GlanceOverlayService.isRunning)
+                }
+                "isAccessibilityEnabled" -> {
+                    val isEnabled = isAccessibilityServiceEnabled(this, GlanceOverlayService::class.java)
+                    result.success(isEnabled)
+                }
+                "openAccessibilitySettings" -> {
+                    openAccessibilitySettings()
+                    result.success(true)
+                }
+                "isOverlayPermissionGranted" -> {
+                    result.success(Settings.canDrawOverlays(this))
+                }
+                "openOverlaySettings" -> {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${packageName}")
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    result.success(true)
                 }
                 "getSettingsFromNative" -> {
                     val prefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
@@ -132,15 +150,14 @@ class MainActivity : FlutterActivity() {
                     }
                     Log.d(TAG, "Settings saved to native: opacity=$opacity, tolerance=$tolerance, sensitivity=$sensitivity")
 
-                    // ── Signal running Service to reload settings immediately ──
-                    // Sending a plain Intent (no action) triggers onStartCommand,
-                    // which now reads SharedPreferences at the top (STEP 1).
-                    // This ensures the overlay updates in real-time when the user
-                    // adjusts sliders, even if the Service was started from the Tile.
+                    // Signal running Service to reload settings via broadcast
                     if (GlanceOverlayService.isRunning) {
-                        val updateIntent = Intent(this, GlanceOverlayService::class.java)
-                        startService(updateIntent)
-                        Log.d(TAG, "Reload signal sent to running Service")
+                        sendBroadcast(Intent(GlanceOverlayService.ACTION_UPDATE_CONFIG).apply {
+                            setPackage(packageName)
+                            putExtra(GlanceOverlayService.EXTRA_SENSITIVITY, sensitivity.toFloat())
+                            putExtra(GlanceOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
+                        })
+                        Log.d(TAG, "Config broadcast sent to running Service")
                     }
 
                     result.success(true)
@@ -149,13 +166,9 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        Log.d(TAG, "MethodChannel '$CHANNEL' configured (6 commands)")
+        Log.d(TAG, "MethodChannel '$CHANNEL' configured")
 
         // ── EventChannel for real-time sensor data streaming ──────────────
-        // Provides a continuous stream of {beta, gamma} angles from the
-        // GlanceOverlayService to Flutter's StreamBuilder widgets.
-        // The sink is stored as a static var on the Service so the sensor
-        // thread can push data without holding a reference to the Activity.
         sensorEventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             SENSOR_STREAM_CHANNEL
@@ -178,7 +191,6 @@ class MainActivity : FlutterActivity() {
         methodChannel?.setMethodCallHandler(null)
         methodChannel = null
 
-        // Clean up EventChannel — detach sink to prevent memory leaks
         GlanceOverlayService.sensorEventSink = null
         sensorEventChannel?.setStreamHandler(null)
         sensorEventChannel = null
@@ -189,113 +201,91 @@ class MainActivity : FlutterActivity() {
     // ── Command Handlers ──────────────────────────────────────────────────
 
     /**
-     * Starts the GlanceOverlayService.
+     * Handles the "startService" command from Flutter (Connected switch).
      *
-     * Before starting, checks if SYSTEM_ALERT_WINDOW permission is granted.
-     * If not, guides the user to the Android settings page to grant it.
-     * The result is held pending until [onActivityResult] resolves it.
+     * IMPORTANT: This method does NOT activate the sensor or wake lock.
+     * The "Connected" switch only confirms whether the AccessibilityService
+     * is enabled. Actual shield activation (sensor + wake lock + overlay)
+     * happens ONLY via:
+     *   • "Hiệu chỉnh ngay" (Calibrate) → ACTION_CALIBRATE
+     *   • Quick Settings Tile toggle → ACTION_RESUME_SERVICE
+     *
+     * This prevents Bug #1 where the overlay auto-activated when the user
+     * simply opened the app and toggled the Connected switch.
      */
-    /// Pending localized notification strings (held while waiting for permission).
-    private var pendingNotifTitle: String? = null
-    private var pendingNotifText: String? = null
-
     private fun handleStartService(
         result: MethodChannel.Result,
         notifTitle: String? = null,
         notifText: String? = null
     ) {
-        if (!Settings.canDrawOverlays(this)) {
-            Log.d(TAG, "Overlay permission not granted — requesting...")
-            pendingResult = result
-            pendingNotifTitle = notifTitle
-            pendingNotifText = notifText
-
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST)
+        if (GlanceOverlayService.isAccessibilityEnabled(this)) {
+            // Accessibility is enabled — report success but do NOT
+            // send ACTION_RESUME_SERVICE. The service stays hibernated
+            // until the user explicitly taps "Hiệu chỉnh ngay" or the Tile.
+            Log.d(TAG, "Accessibility service enabled — service bound (no auto-resume)")
+            result.success(true)
             return
         }
 
-        startOverlayService(notifTitle, notifText)
-        result.success(true)
+        // Not enabled — guide user to Accessibility Settings
+        Log.d(TAG, "Accessibility service not enabled — opening settings...")
+        pendingResult = result
+        openAccessibilitySettings()
     }
 
     /**
-     * Stops the GlanceOverlayService.
+     * Handles the "stopService" command from Flutter.
+     *
+     * Sends a hibernate broadcast to the service which removes the overlay
+     * and pauses the sensor — but keeps the AccessibilityService alive.
+     * NEVER calls disableSelf() or stopService() as that would crash and
+     * revoke the Accessibility permission.
      */
     private fun handleStopService(result: MethodChannel.Result) {
-        val intent = Intent(this, GlanceOverlayService::class.java)
-        stopService(intent)
-        Log.d(TAG, "Service stop requested")
+        sendBroadcast(Intent(GlanceOverlayService.ACTION_STOP_SERVICE).apply {
+            setPackage(packageName)
+        })
+        Log.d(TAG, "Stop broadcast sent to service")
         result.success(true)
     }
 
     /**
-     * Sends a calibration command to the running service.
+     * Sends a calibration command via broadcast to the running service.
      */
     private fun handleCalibrate(result: MethodChannel.Result) {
-        val intent = Intent(this, GlanceOverlayService::class.java).apply {
-            action = GlanceOverlayService.ACTION_CALIBRATE
-        }
-        startService(intent)
-        Log.d(TAG, "Calibrate command sent to service")
+        sendBroadcast(Intent(GlanceOverlayService.ACTION_CALIBRATE).apply {
+            setPackage(packageName)
+        })
+        Log.d(TAG, "Calibrate broadcast sent to service")
         result.success(true)
     }
 
     /**
-     * Sends the updated sensitivity/tolerance value to the running service.
-     *
-     * @param value Normalized sensitivity (0.0 = most sensitive, 1.0 = least).
+     * Sends the updated sensitivity value via broadcast to the running service.
      */
     private fun handleSetSensitivity(value: Double, result: MethodChannel.Result) {
-        val intent = Intent(this, GlanceOverlayService::class.java).apply {
-            action = GlanceOverlayService.ACTION_SET_SENSITIVITY
+        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_SENSITIVITY).apply {
+            setPackage(packageName)
             putExtra(GlanceOverlayService.EXTRA_SENSITIVITY, value.toFloat())
-        }
-        startService(intent)
-        Log.d(TAG, "Sensitivity set to $value")
+        })
+        Log.d(TAG, "Sensitivity broadcast: $value")
         result.success(true)
     }
 
     /**
-     * Switches the overlay mode between fullscreen and targeted.
-     *
-     * @param mode Either "fullscreen" or "targeted".
-     *
-     * In fullscreen mode, the overlay covers the entire screen.
-     * In targeted mode, the overlay covers only the area defined by
-     * [handleSetTargetedArea].
+     * Sends the overlay mode via broadcast to the running service.
      */
     private fun handleSetOverlayMode(mode: String, result: MethodChannel.Result) {
-        val intent = Intent(this, GlanceOverlayService::class.java).apply {
-            action = GlanceOverlayService.ACTION_SET_OVERLAY_MODE
+        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_OVERLAY_MODE).apply {
+            setPackage(packageName)
             putExtra(GlanceOverlayService.EXTRA_MODE, mode)
-        }
-        startService(intent)
-        Log.d(TAG, "Overlay mode set to: $mode")
+        })
+        Log.d(TAG, "Overlay mode broadcast: $mode")
         result.success(true)
     }
 
     /**
-     * Sends the targeted area coordinates to the overlay service.
-     *
-     * All values are in PHYSICAL PIXELS — Flutter converts from logical
-     * pixels using `devicePixelRatio` before calling this method:
-     *
-     *   physicalX = logicalX * devicePixelRatio
-     *   physicalY = (logicalY + statusBarHeight) * devicePixelRatio
-     *   physicalWidth  = logicalWidth  * devicePixelRatio
-     *   physicalHeight = logicalHeight * devicePixelRatio
-     *
-     * WindowManager uses physical pixels natively, so no conversion
-     * is needed on the Kotlin side.
-     *
-     * @param x      Left edge in physical pixels from screen left
-     * @param y      Top edge in physical pixels from screen top
-     * @param width  Width in physical pixels
-     * @param height Height in physical pixels
+     * Sends the targeted area coordinates via broadcast to the running service.
      */
     private fun handleSetTargetedArea(
         x: Int,
@@ -304,103 +294,107 @@ class MainActivity : FlutterActivity() {
         height: Int,
         result: MethodChannel.Result
     ) {
-        val intent = Intent(this, GlanceOverlayService::class.java).apply {
-            action = GlanceOverlayService.ACTION_SET_TARGETED_AREA
+        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_TARGETED_AREA).apply {
+            setPackage(packageName)
             putExtra(GlanceOverlayService.EXTRA_AREA_X, x)
             putExtra(GlanceOverlayService.EXTRA_AREA_Y, y)
             putExtra(GlanceOverlayService.EXTRA_AREA_WIDTH, width)
             putExtra(GlanceOverlayService.EXTRA_AREA_HEIGHT, height)
-        }
-        startService(intent)
-        Log.d(TAG, "Targeted area sent: x=$x, y=$y, w=$width, h=$height (physical px)")
+        })
+        Log.d(TAG, "Targeted area broadcast: x=$x, y=$y, w=$width, h=$height")
         result.success(true)
     }
 
     /**
-     * Sends the overlay intensity (vault density) value to the running service.
-     *
-     * @param intensity Opacity ceiling (0.1 = nearly transparent, 1.0 = fully opaque).
+     * Sends the overlay intensity via broadcast to the running service.
      */
     private fun handleSetIntensity(intensity: Double, result: MethodChannel.Result) {
-        val intent = Intent(this, GlanceOverlayService::class.java).apply {
-            action = GlanceOverlayService.ACTION_SET_INTENSITY
+        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_INTENSITY).apply {
+            setPackage(packageName)
             putExtra(GlanceOverlayService.EXTRA_INTENSITY, intensity.toFloat())
-        }
-        startService(intent)
-        Log.d(TAG, "Intensity set to $intensity")
+        })
+        Log.d(TAG, "Intensity broadcast: $intensity")
         result.success(true)
     }
 
     /**
-     * Sends the hysteresis tolerance (dead zone) value to the running service.
-     *
-     * Controls the angle gap between activation and deactivation thresholds
-     * to prevent flicker at boundary angles:
-     *   • Overlay ACTIVATES when deviation > snapToZeroThreshold
-     *   • Overlay DEACTIVATES when deviation < (snapToZeroThreshold - tolerance)
-     *
-     * @param tolerance Dead zone width in degrees (2.0 – 20.0, default 5.0).
+     * Sends the tolerance value via broadcast to the running service.
      */
     private fun handleSetTolerance(tolerance: Double, result: MethodChannel.Result) {
-        val intent = Intent(this, GlanceOverlayService::class.java).apply {
-            action = GlanceOverlayService.ACTION_SET_TOLERANCE
+        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_TOLERANCE).apply {
+            setPackage(packageName)
             putExtra(GlanceOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
-        }
-        startService(intent)
-        Log.d(TAG, "Tolerance set to $tolerance°")
+        })
+        Log.d(TAG, "Tolerance broadcast: $tolerance°")
         result.success(true)
     }
 
-    // ── Overlay Permission Result ─────────────────────────────────────────
+    // ── Accessibility Helper ────────────────────────────────────────────────
+
+    /**
+     * Robust helper to check if a specific AccessibilityService is enabled.
+     *
+     * Parses the colon-separated ENABLED_ACCESSIBILITY_SERVICES setting
+     * using [TextUtils.SimpleStringSplitter] and compares each entry as
+     * a [ComponentName] object via [ComponentName.unflattenFromString].
+     *
+     * This handles both short-form ("pkg/.Class") and full-form
+     * ("pkg/pkg.Class") representations that different OEMs store.
+     *
+     * Serves as the single source of truth for the MethodChannel
+     * "isAccessibilityEnabled" call from Flutter.
+     */
+    private fun isAccessibilityServiceEnabled(
+        context: Context,
+        accessibilityService: Class<*>
+    ): Boolean {
+        val expectedComponentName = android.content.ComponentName(context, accessibilityService)
+        val enabledServicesSetting = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+
+        val colonSplitter = android.text.TextUtils.SimpleStringSplitter(':')
+        colonSplitter.setString(enabledServicesSetting)
+        while (colonSplitter.hasNext()) {
+            val componentNameString = colonSplitter.next()
+            val enabledService = android.content.ComponentName.unflattenFromString(componentNameString)
+            if (enabledService != null && enabledService == expectedComponentName) {
+                return true
+            }
+        }
+        return false
+    }
+
+    // ── Accessibility Settings ─────────────────────────────────────────────
+
+    /**
+     * Opens the Android Accessibility Settings screen so the user can
+     * enable/disable the GlanceOverlayService.
+     */
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivityForResult(intent, ACCESSIBILITY_SETTINGS_REQUEST)
+    }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == OVERLAY_PERMISSION_REQUEST) {
-            if (Settings.canDrawOverlays(this)) {
-                startOverlayService(pendingNotifTitle, pendingNotifText)
+        if (requestCode == ACCESSIBILITY_SETTINGS_REQUEST) {
+            if (isAccessibilityServiceEnabled(this, GlanceOverlayService::class.java)) {
                 pendingResult?.success(true)
-                Log.d(TAG, "Overlay permission granted")
+                Log.d(TAG, "Accessibility service enabled by user")
             } else {
                 pendingResult?.error(
-                    "PERMISSION_DENIED",
-                    "Overlay permission is required for Glance to protect your screen.",
+                    "ACCESSIBILITY_NOT_ENABLED",
+                    "Please enable Glance in Accessibility Settings to protect your screen.",
                     null
                 )
-                Log.w(TAG, "Overlay permission denied by user")
+                Log.w(TAG, "Accessibility service not enabled by user")
             }
             pendingResult = null
-            pendingNotifTitle = null
-            pendingNotifText = null
         }
-    }
-
-    // ── Helper ────────────────────────────────────────────────────────────
-
-    /**
-     * Starts the GlanceOverlayService as a foreground service.
-     * Uses startForegroundService() on Android O+ for compliance.
-     *
-     * Optionally passes localized notification title/text from Flutter
-     * so the foreground notification displays in the user's language.
-     */
-    private fun startOverlayService(
-        notifTitle: String? = null,
-        notifText: String? = null
-    ) {
-        val intent = Intent(this, GlanceOverlayService::class.java).apply {
-            notifTitle?.let {
-                putExtra(GlanceOverlayService.EXTRA_NOTIFICATION_TITLE, it)
-            }
-            notifText?.let {
-                putExtra(GlanceOverlayService.EXTRA_NOTIFICATION_TEXT, it)
-            }
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-        Log.d(TAG, "Overlay service started (notifTitle=$notifTitle)")
     }
 }

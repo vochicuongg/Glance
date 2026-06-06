@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Glance</string>
+    <string name="accessibility_service_description">Kích hoạt để Glance tạo rèm che bảo mật che giấu thông tin màn hình.</string>
+</resources>

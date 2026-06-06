@@ -109,6 +109,74 @@ class GlanceChannelService {
     }
   }
 
+  /// Checks whether the GlanceOverlayService (AccessibilityService) is
+  /// currently enabled in the device's Accessibility Settings.
+  ///
+  /// This is different from [isServiceRunning] — the accessibility service
+  /// can be enabled in settings but not yet fully connected (brief delay),
+  /// or it can be running but the user hasn't explicitly enabled it
+  /// (shouldn't happen, but defensive check).
+  ///
+  /// Returns `true` if the accessibility service is enabled, `false` otherwise.
+  static Future<bool> isAccessibilityEnabled() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('isAccessibilityEnabled');
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Opens the Android Accessibility Settings screen so the user can
+  /// enable or disable the GlanceOverlayService.
+  ///
+  /// Since GlanceOverlayService is an AccessibilityService, it cannot be
+  /// started/stopped programmatically — the user must toggle it in Settings.
+  static Future<bool> openAccessibilitySettings() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('openAccessibilitySettings');
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Checks whether the SYSTEM_ALERT_WINDOW (Display over other apps)
+  /// permission is granted for this application.
+  ///
+  /// Returns `true` if the overlay permission is granted, `false` otherwise.
+  /// On Android < 6.0, this always returns `true` (permission not needed).
+  static Future<bool> isOverlayPermissionGranted() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('isOverlayPermissionGranted');
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Opens the system settings page for managing the "Display over other apps"
+  /// (SYSTEM_ALERT_WINDOW / Overlay) permission for this application.
+  ///
+  /// Navigates directly to this app's overlay permission page so the user
+  /// can toggle the permission on/off.
+  static Future<bool> openOverlaySettings() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('openOverlaySettings');
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   /// Starts the native GlanceOverlayService foreground service.
   ///
   /// Accepts optional [notificationTitle] and [notificationText] to display
@@ -132,7 +200,14 @@ class GlanceChannelService {
       return false;
     } on PlatformException catch (e) {
       // Platform-specific error — preserve the error code for UI handling.
-      // Kotlin side sends 'PERMISSION_DENIED' when overlay permission is denied.
+      // Kotlin side sends:
+      //   'PERMISSION_DENIED' when overlay permission is denied (legacy)
+      //   'ACCESSIBILITY_NOT_ENABLED' when accessibility service is not enabled
+      if (e.code == 'ACCESSIBILITY_NOT_ENABLED') {
+        throw GlanceServiceException(
+          'ACCESSIBILITY_NOT_ENABLED: ${e.message}',
+        );
+      }
       throw GlanceServiceException(
         e.code == 'PERMISSION_DENIED'
             ? 'PERMISSION_DENIED: ${e.message}'
