@@ -24,8 +24,7 @@ import '../../../core/theme/app_colors.dart';
 ///   • Real-time degree display (e.g., "5°")
 ///   • Scale labels: Narrow ↔ Wide
 ///
-/// This slider is placed directly below the Vault Density (Intensity)
-/// slider per the architecture spec.
+/// This slider is placed on the dashboard settings area.
 /// ─────────────────────────────────────────────────────────────────────────────
 class ToleranceSliderCard extends StatelessWidget {
   /// Current tolerance value in degrees (2.0 – 40.0).

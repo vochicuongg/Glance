@@ -337,7 +337,7 @@ class GlanceChannelService {
   /// user's configured values when starting the overlay service without
   /// the Flutter UI being open.
   ///
-  /// Called whenever the user changes the Intensity or Tolerance sliders.
+  /// Called whenever the user changes the Tolerance slider.
   static Future<void> saveSettingsToNative(double opacity, double tolerance, double sensitivity) async {
     try {
       await _channel.invokeMethod('saveSettingsToNative', {
@@ -353,29 +353,6 @@ class GlanceChannelService {
     }
   }
 
-  /// Sends the overlay intensity (vault density) value to the native service.
-  ///
-  /// Controls the maximum opacity the overlay can reach:
-  ///   • 0.1 = nearly transparent (10% max darkness)
-  ///   • 1.0 = fully opaque (100% max darkness)
-  ///
-  /// The native side clamps the computed alpha to never exceed this value,
-  /// giving users precise control over how dark the "vault" gets.
-  Future<bool> setIntensity(double intensity) async {
-    try {
-      final result = await _channel.invokeMethod<bool>(
-        'setIntensity',
-        {'intensity': intensity},
-      );
-      return result ?? false;
-    } on MissingPluginException {
-      return false;
-    } on PlatformException catch (e) {
-      throw GlanceServiceException(
-        'Failed to set intensity: ${e.message}',
-      );
-    }
-  }
 }
 
 /// Custom exception for Glance service errors.

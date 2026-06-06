@@ -9,7 +9,6 @@ import '../../../core/services/glance_channel_service.dart';
 import '../widgets/shield_status_card.dart';
 import '../widgets/sensitivity_slider_card.dart';
 import '../widgets/calibrate_card.dart';
-import '../widgets/intensity_slider_card.dart';
 import '../widgets/tolerance_slider_card.dart';
 import '../widgets/overlay_mode_card.dart';
 import 'settings_screen.dart';
@@ -45,7 +44,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _isServiceActive = false;
   bool _isCalibrated = false;
   double _sensitivity = 0.5; // Default: Medium
-  double _overlayIntensity = 0.8; // Default: 80% vault density
   double _tolerance = 5.0; // Default: 5° hysteresis dead zone
   bool _isTargetedMode = false; // false = fullscreen, true = targeted
 
@@ -62,16 +60,15 @@ class _DashboardScreenState extends State<DashboardScreen>
     _loadSavedSettings(); // Restore sliders from Native SharedPreferences
   }
 
-  /// Reads the user's last-saved opacity & tolerance from Native
+  /// Reads the user's last-saved tolerance & sensitivity from Native
   /// SharedPreferences and applies them to the UI slider state.
   ///
   /// This prevents the "lost memory" bug where killing the app caused
-  /// sliders to reset to hardcoded defaults (0.8 / 5.0).
+  /// sliders to reset to hardcoded defaults.
   Future<void> _loadSavedSettings() async {
     final settings = await GlanceChannelService.getSettingsFromNative();
     if (mounted) {
       setState(() {
-        _overlayIntensity = settings['opacity'] ?? 0.8;
         _tolerance = settings['tolerance'] ?? 5.0;
         _sensitivity = settings['sensitivity'] ?? 0.5;
         // Only sync isCalibrated from Native if Service IS RUNNING
@@ -152,7 +149,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       } else {
         await _channelService.stopService();
         // Reset calibration status when service stops
-        setState(() => _isCalibrated = false);
+          setState(() => _isCalibrated = false);
       }
     } on GlanceServiceException catch (e) {
       // Revert the toggle on failure
@@ -194,27 +191,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _handleSensitivityChangeEnd(double value) async {
     try {
       await _channelService.setSensitivity(value);
-      GlanceChannelService.saveSettingsToNative(_overlayIntensity, _tolerance, value);
-    } on GlanceServiceException catch (e) {
-      if (mounted) {
-        _showSnackBar(e.message);
-      }
-    }
-  }
-
-  /// Update overlay intensity slider value (UI only — continuous drag).
-  void _handleIntensityChanged(double value) {
-    setState(() => _overlayIntensity = value);
-  }
-
-  /// Send final intensity value to native service (on drag end).
-  /// Also persists to native SharedPreferences for Quick Settings Tile.
-  Future<void> _handleIntensityChangeEnd(double value) async {
-    try {
-      await _channelService.setIntensity(value);
-      // Persist to native SharedPreferences so Quick Settings Tile
-      // can read the user's configured opacity when launching the service.
-      GlanceChannelService.saveSettingsToNative(value, _tolerance, _sensitivity);
+      GlanceChannelService.saveSettingsToNative(0.8, _tolerance, value);
     } on GlanceServiceException catch (e) {
       if (mounted) {
         _showSnackBar(e.message);
@@ -234,7 +211,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       await _channelService.setTolerance(value);
       // Persist to native SharedPreferences so Quick Settings Tile
       // can read the user's configured tolerance when launching the service.
-      GlanceChannelService.saveSettingsToNative(_overlayIntensity, value, _sensitivity);
+      GlanceChannelService.saveSettingsToNative(0.8, value, _sensitivity);
     } on GlanceServiceException catch (e) {
       if (mounted) {
         _showSnackBar(e.message);
@@ -518,17 +495,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                   const SizedBox(height: 16),
 
-                  // 4. Intensity Slider Card (Vault Density)
-                  IntensitySliderCard(
-                    value: _overlayIntensity,
-                    isServiceActive: _isServiceActive,
-                    onChanged: _handleIntensityChanged,
-                    onChangeEnd: _handleIntensityChangeEnd,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // 4b. Tolerance Slider Card (Flicker Guard / Vùng chấp nhận lệch)
+                  // 4. Tolerance Slider Card (Flicker Guard / Vùng chấp nhận lệch)
                   ToleranceSliderCard(
                     value: _tolerance,
                     isServiceActive: _isServiceActive,

@@ -108,12 +108,6 @@ class LocalizedStrings {
   final String sensorFrontBack;
   final String sensorLeftRight;
 
-  // ── Intensity Slider Card ────────────────────────────────────────────
-  final String intensity;
-  final String intensitySubtitle;
-  final String intensityLight;
-  final String intensityMax;
-
   // ── Tolerance Slider Card (Hysteresis Dead Zone) ─────────────────────
   final String tolerance;
   final String toleranceSubtitle;
@@ -175,10 +169,6 @@ class LocalizedStrings {
     required this.settings,
     required this.sensorFrontBack,
     required this.sensorLeftRight,
-    required this.intensity,
-    required this.intensitySubtitle,
-    required this.intensityLight,
-    required this.intensityMax,
     required this.tolerance,
     required this.toleranceSubtitle,
     required this.toleranceNarrow,
@@ -270,12 +260,6 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     settings: 'Settings',
     sensorFrontBack: 'Front / Back (Beta)',
     sensorLeftRight: 'Left / Right (Gamma)',
-
-    // Intensity
-    intensity: 'Vault Density',
-    intensitySubtitle: 'Adjust maximum overlay darkness',
-    intensityLight: 'Light',
-    intensityMax: 'Maximum',
 
     // Tolerance (Hysteresis)
     tolerance: 'Flicker Guard',
@@ -371,12 +355,6 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     settings: 'Cài đặt',
     sensorFrontBack: 'Trước / Sau (Beta)',
     sensorLeftRight: 'Trái / Phải (Gamma)',
-
-    // Cường độ che phủ
-    intensity: 'Mật độ két sắt',
-    intensitySubtitle: 'Điều chỉnh độ tối tối đa của lớp phủ',
-    intensityLight: 'Nhẹ',
-    intensityMax: 'Tối đa',
 
     // Vùng chấp nhận lệch (Góc trễ)
     tolerance: 'Vùng chấp nhận lệch',
