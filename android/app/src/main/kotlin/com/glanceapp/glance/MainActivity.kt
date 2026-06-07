@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.annotation.NonNull
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterActivityLaunchConfigs.BackgroundMode
 import io.flutter.embedding.engine.FlutterEngine
@@ -212,17 +213,84 @@ class MainActivity : FlutterActivity() {
      *
      * This prevents Bug #1 where the overlay auto-activated when the user
      * simply opened the app and toggled the Connected switch.
+     *
+     * MODE AWARENESS (Bug fix):
+     *   • Standard mode: Only checks Overlay permission, skips Accessibility.
+     *     Starts sensor immediately for Beta/Gamma bars (no overlay until calibration).
+     *   • Maximum mode: Requires Accessibility enabled. If not, guides user to settings.
      */
     private fun handleStartService(
         result: MethodChannel.Result,
         notifTitle: String? = null,
         notifText: String? = null
     ) {
+        // Read the protection mode from Flutter SharedPreferences
+        val flutterPrefs = getSharedPreferences(
+            "FlutterSharedPreferences", Context.MODE_PRIVATE
+        )
+        val protectionMode = flutterPrefs.getString(
+            "flutter.protection_mode", "maximum"
+        ) ?: "maximum"
+
+        Log.d(TAG, "handleStartService — protection_mode=$protectionMode")
+
+        if (protectionMode == "standard") {
+            // ── Standard mode: Only overlay permission needed ──────────────
+            // Skip accessibility check entirely. The overlay will use
+            // TYPE_APPLICATION_OVERLAY instead of TYPE_ACCESSIBILITY_OVERLAY.
+            if (!Settings.canDrawOverlays(this)) {
+                Log.d(TAG, "Standard mode — overlay permission missing, opening settings...")
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${packageName}")
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+                result.error(
+                    "OVERLAY_NOT_GRANTED",
+                    "Please grant 'Display over other apps' permission.",
+                    null
+                )
+                return
+            }
+
+            // ── Standard mode: explicitly start the Service ───────────────
+            // In Standard mode, the system does NOT auto-start the service
+            // (no Accessibility enabled). The BroadcastReceiver is registered
+            // dynamically in onCreate/onServiceConnected, so sending a
+            // broadcast without starting the service first would be lost.
+            //
+            // We call startForegroundService() to ensure the service process
+            // exists, THEN send the ACTION_START_SENSOR_ONLY broadcast after
+            // a short delay to allow onCreate() to register the receiver.
+            Log.d(TAG, "Standard mode — overlay permission OK, starting service explicitly")
+
+            val serviceIntent = Intent(this, GlanceOverlayService::class.java).apply {
+                action = GlanceOverlayService.ACTION_START_STANDARD_MODE
+                putExtra(GlanceOverlayService.EXTRA_NOTIFICATION_TITLE,
+                    notifTitle ?: "Glance đang bảo vệ")
+                putExtra(GlanceOverlayService.EXTRA_NOTIFICATION_TEXT,
+                    notifText ?: "Chế độ tiêu chuẩn đang hoạt động")
+            }
+            ContextCompat.startForegroundService(this, serviceIntent)
+
+            result.success(true)
+            return
+        }
+
+        // ── Maximum mode: Accessibility required ──────────────────────────
         if (GlanceOverlayService.isAccessibilityEnabled(this)) {
             // Accessibility is enabled — report success but do NOT
             // send ACTION_RESUME_SERVICE. The service stays hibernated
             // until the user explicitly taps "Hiệu chỉnh ngay" or the Tile.
             Log.d(TAG, "Accessibility service enabled — service bound (no auto-resume)")
+
+            // Start sensor streaming for Beta/Gamma bars
+            sendBroadcast(Intent(GlanceOverlayService.ACTION_START_SENSOR_ONLY).apply {
+                setPackage(packageName)
+            })
+
             result.success(true)
             return
         }

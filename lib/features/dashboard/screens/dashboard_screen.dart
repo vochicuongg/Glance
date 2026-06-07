@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
@@ -144,12 +145,23 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _handleToggleService(bool value) async {
     // ── Pre-flight permission check (only when turning ON) ────────────
     if (value) {
+      final prefs = await SharedPreferences.getInstance();
+      final protectionMode = prefs.getString('protection_mode') ?? 'maximum';
+
       final accessibility =
           await GlanceChannelService.isAccessibilityEnabled();
       final overlay =
           await GlanceChannelService.isOverlayPermissionGranted();
 
-      if (!accessibility || !overlay) {
+      // Standard mode: only overlay needed; Maximum mode: both needed
+      final bool permissionsMissing;
+      if (protectionMode == 'standard') {
+        permissionsMissing = !overlay;
+      } else {
+        permissionsMissing = !accessibility || !overlay;
+      }
+
+      if (permissionsMissing) {
         // Ensure toggle stays OFF
         setState(() => _isServiceActive = false);
 
@@ -450,6 +462,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             // ── App Bar ─────────────────────────────────────────────────────
             SliverAppBar(
               pinned: true,
+              automaticallyImplyLeading: false,
               backgroundColor: AppColors.background(context),
               surfaceTintColor: Colors.transparent,
               expandedHeight: 64,

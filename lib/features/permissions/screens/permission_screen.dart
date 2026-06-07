@@ -1,36 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/glance_channel_service.dart';
 import '../../dashboard/screens/dashboard_screen.dart';
+import '../../onboarding/screens/mode_selection_screen.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
-/// PermissionScreen — Gatekeeper Onboarding (2-Step Sequential Flow)
+/// PermissionScreen — Gatekeeper Onboarding (Mode-Aware Sequential Flow)
 /// ─────────────────────────────────────────────────────────────────────────────
-/// Full-screen permission gate that enforces two mandatory permissions
-/// before allowing access to the Dashboard:
+/// Full-screen permission gate that enforces mandatory permissions before
+/// allowing access to the Dashboard.
 ///
-///   Step 1: Accessibility Service  — required for TYPE_ACCESSIBILITY_OVERLAY
-///   Step 2: Overlay (SYSTEM_ALERT_WINDOW) — required for drawing over apps
+/// **Mode-aware behavior** (reads `protection_mode` from SharedPreferences):
+///
+///   • **Maximum mode** (default / `"maximum"`):
+///     Step 1: Accessibility Service  — required for TYPE_ACCESSIBILITY_OVERLAY
+///     Step 2: Overlay (SYSTEM_ALERT_WINDOW) — required for drawing over apps
+///
+///   • **Standard mode** (`"standard"`):
+///     Step 1 (only): Overlay (SYSTEM_ALERT_WINDOW)
+///     Accessibility is NOT required — skipped entirely.
 ///
 /// Architecture:
 ///   • Uses [WidgetsBindingObserver] to detect when user returns from
 ///     system Settings (AppLifecycleState.resumed) and re-checks permissions
-///   • Two distinct UI screens rendered via [AnimatedSwitcher]:
-///       - Step 1: Accessibility permission request
-///       - Step 2: Overlay permission request (only shown after Step 1 passes)
-///   • Navigation to Dashboard ONLY occurs when BOTH permissions are granted
+///   • Distinct UI screens rendered via [AnimatedSwitcher]
+///   • Navigation to Dashboard ONLY occurs when ALL required permissions
+///     for the selected mode are granted
 ///   • Smooth crossfade + slide animation between steps
-///
-/// Security Model:
-///   This screen acts as an absolute gatekeeper. The app CANNOT function
-///   without both permissions — the overlay shield requires Accessibility
-///   Service privilege, and SYSTEM_ALERT_WINDOW is needed as a fallback
-///   and for Quick Settings Tile usage.
 /// ─────────────────────────────────────────────────────────────────────────────
 class PermissionScreen extends StatefulWidget {
-  const PermissionScreen({super.key});
+  /// When true, the back button pops back to the previous screen (e.g. Settings).
+  /// When false (default/onboarding flow), back navigates to ModeSelectionScreen.
+  final bool fromSettings;
+
+  const PermissionScreen({super.key, this.fromSettings = false});
 
   @override
   State<PermissionScreen> createState() => _PermissionScreenState();
@@ -47,11 +53,15 @@ class _PermissionScreenState extends State<PermissionScreen>
   /// Loading indicator while initial permission check is in progress.
   bool _isLoading = true;
 
+  /// The user's chosen protection mode from onboarding.
+  /// `"standard"` = overlay only; `"maximum"` = accessibility + overlay.
+  String _protectionMode = 'maximum';
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _checkPermissions();
+    _loadModeAndCheckPermissions();
   }
 
   @override
@@ -64,9 +74,7 @@ class _PermissionScreenState extends State<PermissionScreen>
   ///
   /// A short delay (300ms) is added before re-querying because some
   /// OEMs/Android versions need a moment to persist the accessibility
-  /// setting after the user toggles it in system Settings. Without
-  /// this delay, the MethodChannel call can return stale (false) data,
-  /// causing the permission flow to appear stuck.
+  /// setting after the user toggles it in system Settings.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -76,47 +84,69 @@ class _PermissionScreenState extends State<PermissionScreen>
     }
   }
 
+  /// Loads the protection mode from SharedPreferences, then checks permissions.
+  Future<void> _loadModeAndCheckPermissions() async {
+    final prefs = await SharedPreferences.getInstance();
+    _protectionMode = prefs.getString('protection_mode') ?? 'maximum';
+    await _checkPermissions();
+  }
+
   /// ─────────────────────────────────────────────────────────────────────────
   /// Core Permission Logic
   /// ─────────────────────────────────────────────────────────────────────────
-  /// Queries BOTH permissions from the native side and updates state.
+  /// Queries permissions from the native side and updates state.
   ///
-  /// Navigation rule (STRICT):
-  ///   Navigator.pushReplacement → DashboardScreen
-  ///   IF AND ONLY IF: _hasAccessibility == true && _hasOverlay == true
-  ///   Otherwise: stay on this screen and render the appropriate step UI.
+  /// Navigation rule:
+  ///   • Maximum mode: both accessibility + overlay required
+  ///   • Standard mode: only overlay required
   /// ─────────────────────────────────────────────────────────────────────────
   Future<void> _checkPermissions() async {
-    final accessibility = await GlanceChannelService.isAccessibilityEnabled();
-    final overlay = await GlanceChannelService.isOverlayPermissionGranted();
+    final results = await Future.wait([
+      GlanceChannelService.isAccessibilityEnabled(),
+      GlanceChannelService.isOverlayPermissionGranted(),
+    ]);
 
     if (!mounted) return;
 
     setState(() {
-      _hasAccessibility = accessibility;
-      _hasOverlay = overlay;
+      _hasAccessibility = results[0];
+      _hasOverlay = results[1];
       _isLoading = false;
     });
 
-    // ── STRICT navigation guard ──────────────────────────────────────────
-    // ONLY navigate to Dashboard when BOTH permissions are granted.
-    // If either is missing, the user stays on this screen.
-    if (_hasAccessibility && _hasOverlay) {
-      _navigateToDashboard();
+    // ── Mode-aware navigation guard ─────────────────────────────────────
+    if (_protectionMode == 'standard') {
+      // Standard mode: only overlay needed
+      if (_hasOverlay) {
+        _navigateForward();
+      }
+    } else {
+      // Maximum mode: both permissions needed
+      if (_hasAccessibility && _hasOverlay) {
+        _navigateForward();
+      }
     }
   }
 
-  /// Replaces this screen with DashboardScreen (no back navigation).
-  void _navigateToDashboard() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => const DashboardScreen(),
-      ),
-    );
+  /// Navigates forward after all permissions are granted.
+  /// - From settings: just pop back to SettingsScreen
+  /// - From onboarding: replace with DashboardScreen
+  void _navigateForward() {
+    if (widget.fromSettings) {
+      // Coming from Settings → pop back so SettingsScreen can re-check
+      Navigator.of(context).pop();
+    } else {
+      // Onboarding flow → replace with Dashboard
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const DashboardScreen(),
+        ),
+      );
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  BUILD — 2-Step Sequential UI
+  //  BUILD — Mode-Aware Sequential UI
   // ═══════════════════════════════════════════════════════════════════════════
 
   @override
@@ -134,35 +164,14 @@ class _PermissionScreenState extends State<PermissionScreen>
     }
 
     // ── Determine which step to render ─────────────────────────────────────
-    // Step 1: Accessibility not yet granted → show Accessibility UI
-    // Step 2: Accessibility granted, Overlay not yet → show Overlay UI
-    // Both granted: handled above in _checkPermissions → auto-navigate
     final Widget stepContent;
 
-    if (!_hasAccessibility) {
-      // ── STEP 1: Accessibility Permission ─────────────────────────────────
+    if (_protectionMode == 'standard') {
+      // ── STANDARD MODE: Only 1 step (Overlay) ───────────────────────────
       stepContent = _PermissionStepView(
-        key: const ValueKey('step_accessibility'),
+        key: const ValueKey('step_overlay_standard'),
         currentStep: 1,
-        totalSteps: 2,
-        icon: Icons.accessibility_new_rounded,
-        title: strings.permAccessibilityTitle,
-        description: strings.permAccessibilityDesc,
-        buttonText: strings.permAccessibilityButton,
-        refreshText: strings.permRefreshStatus,
-        onOpenSettings: () => GlanceChannelService.openAccessibilitySettings(),
-        onRefresh: _checkPermissions,
-        colorScheme: colorScheme,
-        theme: theme,
-        strings: strings,
-      );
-    } else {
-      // ── STEP 2: Overlay Permission ───────────────────────────────────────
-      // We only reach here when _hasAccessibility == true && _hasOverlay == false
-      stepContent = _PermissionStepView(
-        key: const ValueKey('step_overlay'),
-        currentStep: 2,
-        totalSteps: 2,
+        totalSteps: 1,
         icon: Icons.layers_rounded,
         title: strings.permOverlayTitle,
         description: strings.permOverlayDesc,
@@ -174,10 +183,91 @@ class _PermissionScreenState extends State<PermissionScreen>
         theme: theme,
         strings: strings,
       );
+    } else {
+      // ── MAXIMUM MODE: 2 steps (Accessibility → Overlay) ────────────────
+      if (!_hasAccessibility) {
+        // Step 1: Accessibility
+        stepContent = _PermissionStepView(
+          key: const ValueKey('step_accessibility'),
+          currentStep: 1,
+          totalSteps: 2,
+          icon: Icons.accessibility_new_rounded,
+          title: strings.permAccessibilityTitle,
+          description: strings.permAccessibilityDesc,
+          buttonText: strings.permAccessibilityButton,
+          refreshText: strings.permRefreshStatus,
+          onOpenSettings: () =>
+              GlanceChannelService.openAccessibilitySettings(),
+          onRefresh: _checkPermissions,
+          colorScheme: colorScheme,
+          theme: theme,
+          strings: strings,
+        );
+      } else {
+        // Step 2: Overlay
+        stepContent = _PermissionStepView(
+          key: const ValueKey('step_overlay'),
+          currentStep: 2,
+          totalSteps: 2,
+          icon: Icons.layers_rounded,
+          title: strings.permOverlayTitle,
+          description: strings.permOverlayDesc,
+          buttonText: strings.permOverlayButton,
+          refreshText: strings.permRefreshStatus,
+          onOpenSettings: () => GlanceChannelService.openOverlaySettings(),
+          onRefresh: _checkPermissions,
+          colorScheme: colorScheme,
+          theme: theme,
+          strings: strings,
+        );
+      }
     }
 
-    return Scaffold(
+    return PopScope(
+      // Intercept system back button to use same logic as AppBar back
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (widget.fromSettings) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const ModeSelectionScreen(),
+            ),
+          );
+        }
+      },
+      child: Scaffold(
       backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () {
+            if (widget.fromSettings) {
+              // Coming from Settings → just pop back
+              Navigator.of(context).pop();
+            } else {
+              // Onboarding flow → go to ModeSelectionScreen
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => const ModeSelectionScreen(),
+                ),
+              );
+            }
+          },
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: colorScheme.onSurfaceVariant,
+            size: 20,
+          ),
+          tooltip: widget.fromSettings
+              ? 'Quay lại cài đặt'
+              : 'Quay lại chọn chế độ',
+        ),
+      ),
       body: SafeArea(
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 450),
@@ -202,6 +292,7 @@ class _PermissionScreenState extends State<PermissionScreen>
           child: stepContent,
         ),
       ),
+      ),
     );
   }
 }
@@ -218,7 +309,7 @@ class _PermissionScreenState extends State<PermissionScreen>
 ///
 /// This is a private stateless widget used exclusively by PermissionScreen.
 /// The [key] parameter (ValueKey) is critical for AnimatedSwitcher to
-/// distinguish between Step 1 and Step 2 and trigger the transition.
+/// distinguish between steps and trigger the transition.
 /// ─────────────────────────────────────────────────────────────────────────────
 class _PermissionStepView extends StatelessWidget {
   final int currentStep;

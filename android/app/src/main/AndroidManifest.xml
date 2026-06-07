@@ -10,6 +10,11 @@
     <!-- Prevent the system from killing our sensor-reading service -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Required for Standard mode: run as a foreground service when
+         Accessibility is not used (no auto-start by the system) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
     <application
         android:label="Glance"
         android:name="${applicationName}"
@@ -49,6 +54,7 @@
             android:name=".GlanceOverlayService"
             android:enabled="true"
             android:exported="false"
+            android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -56,6 +62,9 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_config" />
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Screen privacy overlay and sensor monitoring" />
         </service>
 
         <!-- ════════════════════════════════════════════════════════════════
