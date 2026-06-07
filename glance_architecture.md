@@ -1,27 +1,22 @@
-YÊU CẦU FIX LỖI ALPHA VÀ ĐỒNG BỘ UI DÀNH CHO CLAUDE:
-Bạn là một Senior Android & Flutter Developer. Ở lần sửa trước, bạn đã báo cáo sai về trạng thái biến Alpha và chúng ta cần thay đổi lại logic UI của nút Settings. Hãy rà soát và thực hiện chính xác 2 bước sau:
+BƯỚC 1: DỌN DẸP VÀ THIẾT LẬP BIẾN TOÀN CỤC MỚI
 
-BƯỚC 1: SỬA ĐÚNG BIẾN MAX_SAFE_ALPHA THÀNH 242 (95%)
-- Mở `GlanceOverlayService.kt`.
-- Tìm đến dòng khai báo: `private val MAX_SAFE_ALPHA = 204` (đang nằm ở khoảng dòng 76, KHÔNG PHẢI trong companion object).
-- Hãy SỬA TRỰC TIẾP dòng đó thành: `private val MAX_SAFE_ALPHA = 242`. 
-- Tuyệt đối không được bỏ sót hay chỉ sửa comment! Đảm bảo hàm `applyAlphaToOverlay()` nhân tỷ lệ với đúng 242 để rèm đạt độ che phủ 95%.
+Trong cả 2 file Service, hãy tìm và xóa bỏ hoàn toàn các biến làm mượt góc nghiêng cũ (ví dụ: smoothedPitch, smoothedRoll, smoothedDeviation).
 
-BƯỚC 2: ĐỒNG BỘ STYLE NÚT CHỌN CHẾ ĐỘ BẢO VỆ TRONG SETTINGS
-- Mở file chứa UI của phần chọn Chế độ bảo vệ (Tiêu chuẩn/Tối đa) trong Cài đặt.
-- Ở lần trước, logic thiết lập là "Chế độ đang chọn thì bị mờ/disabled" -> Hãy HỦY BỎ logic này.
-- Hãy sửa lại giao diện của nút (SegmentButton / GestureDetector) sao cho GIỐNG HỆT style của nút chọn Theme (Light/Dark mode) trong `settings_screen.dart`.
-- Cụ thể:
-  + Nếu chế độ **ĐƯỢC CHỌN** (`isSelected == true`):
-    * Chữ và Icon màu `AppColors.gold`.
-    * Chữ in đậm (`FontWeight.w600`).
-    * Nền nút: `AppColors.gold.withValues(alpha: 0.15)`.
-    * Viền nút: `Border.all(color: AppColors.gold.withValues(alpha: 0.4), width: 1)`.
-  + Nếu chế độ **CHƯA ĐƯỢC CHỌN** (`isSelected == false`):
-    * Chữ và Icon màu `AppColors.textTertiaryC(context)`.
-    * Chữ in thường (`FontWeight.w400`).
-    * Nền trong suốt (`Colors.transparent`).
-    * Không viền.
-- Đảm bảo khi bấm vào nút đang chọn không xảy ra lỗi, UI chỉ đơn giản là đang Highlight màu vàng Gold đồng bộ với toàn bộ ứng dụng.
+Khai báo một biến toàn cục mới (kiểu Float, khởi tạo bằng 0) để quản lý trực tiếp "Giá trị Alpha đang hiển thị trên màn hình" (Current Displayed Alpha).
 
-Viết code cẩn thận, test lại file Kotlin để không bị lỗi cú pháp. Báo cáo lại chi tiết sau khi ghi đè!
+BƯỚC 2: TÁI CẤU TRÚC THUẬT TOÁN TẠI HÀM LẮNG NGHE CẢM BIẾN (onSensorChanged)
+Viết lại luồng logic xử lý dữ liệu cảm biến cho cả 2 class theo các bước toán học sau:
+
+Tính Alpha Mục Tiêu (Target Alpha): Kiểm tra góc nghiêng. Nếu vượt qua ngưỡng an toàn (tolerance), hãy tính tỷ lệ phần trăm vượt ngưỡng (từ 0.0 đến 1.0). Lấy tỷ lệ này nhân với Giới hạn Alpha tối đa (230 đối với Max, 204 đối với Standard) để ra được Alpha Mục Tiêu. Nếu chưa vượt ngưỡng, Alpha Mục Tiêu bằng 0.
+
+Áp dụng Bộ lọc EMA: Cập nhật biến "Alpha đang hiển thị" bằng công thức: Alpha đang hiển thị += 0.04 * (Target Alpha - Alpha đang hiển thị). Hệ số 0.04 sẽ giúp rèm chuyển màu cực kỳ mượt.
+
+Quyết định UI: Kiểm tra biến "Alpha đang hiển thị". Nếu lớn hơn 1f, tiến hành bơm View rèm (nếu chưa có) và gọi hàm áp dụng màu rèm. Nếu nhỏ hơn hoặc bằng 1f, ẩn View rèm đi.
+
+BƯỚC 3: CẬP NHẬT HÀM ÁP DỤNG MÀU (applyAlphaToOverlay)
+
+Sửa lại tham số đầu vào của hàm này: Không nhận tỷ lệ phần trăm nữa, mà nhận trực tiếp giá trị Alpha (kiểu Int) đã được tính toán bằng EMA từ hàm trên.
+
+Trong hàm, phải có bước chốt chặn an toàn (coerceIn) để đảm bảo giá trị Alpha này không bao giờ vượt qua mức trần (230 cho MaxMode, 204 cho StandardMode). Sau đó dùng giá trị này tạo màu đen và set cho Background của View.
+
+Hãy suy nghĩ cẩn thận, thiết kế code Kotlin thật sạch sẽ và tối ưu hiệu năng. Hoàn tất ghi đè thì báo cáo kết quả ngắn gọn.

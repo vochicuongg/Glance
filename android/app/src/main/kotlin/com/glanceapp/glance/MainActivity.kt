@@ -15,21 +15,18 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 /// ─────────────────────────────────────────────────────────────────────────────
-/// MainActivity
+/// MainActivity — Dual-Engine Architecture
 /// ─────────────────────────────────────────────────────────────────────────────
 /// Flutter host Activity that bridges Flutter UI commands to the native
-/// GlanceOverlayService (AccessibilityService) via MethodChannel + Broadcasts.
+/// overlay services via MethodChannel + Broadcasts.
 ///
-/// Since the service is now an AccessibilityService, it CANNOT be started or
-/// stopped via startService()/stopService(). Instead we use a "hibernate"
-/// pattern — the service stays alive but hides its overlay and pauses sensors:
-///   • startService  → if accessibility enabled but hibernated, sends RESUME broadcast;
-///                      if not enabled, opens Accessibility Settings
-///   • stopService   → sends ACTION_STOP_SERVICE broadcast (hibernates: removes overlay,
-///                      pauses sensor — NEVER calls disableSelf() or stopService())
-///   • config updates → sent as broadcasts (BroadcastReceiver in the service)
+/// DUAL-ENGINE ROUTING:
+///   • Standard mode → StandardOverlayService (regular Service, TYPE_APPLICATION_OVERLAY)
+///     Only needs Overlay permission. Banking apps work normally.
+///   • Maximum mode  → MaxOverlayService (AccessibilityService, TYPE_ACCESSIBILITY_OVERLAY)
+///     Needs both Accessibility + Overlay. Darker but banking apps blocked.
 ///
-/// The sensor EventChannel pipeline remains unchanged.
+/// The mode is read from Flutter SharedPreferences ("flutter.protection_mode").
 /// ─────────────────────────────────────────────────────────────────────────────
 class MainActivity : FlutterActivity() {
 
@@ -55,6 +52,45 @@ class MainActivity : FlutterActivity() {
 
     /// Pending MethodChannel result to resolve after accessibility grant.
     private var pendingResult: MethodChannel.Result? = null
+
+    // ── Helper: Read protection mode from Flutter SharedPreferences ────────
+    private fun getProtectionMode(): String {
+        val flutterPrefs = getSharedPreferences(
+            "FlutterSharedPreferences", Context.MODE_PRIVATE
+        )
+        return flutterPrefs.getString(
+            "flutter.protection_mode", "maximum"
+        ) ?: "maximum"
+    }
+
+    // ── Helper: Check if EITHER service is currently running ───────────────
+    private fun isAnyServiceRunning(): Boolean {
+        return MaxOverlayService.isRunning || StandardOverlayService.isRunning
+    }
+
+    // ── Helper: Get the active sensor event sink from whichever service ────
+    private fun getActiveSensorEventSink(): io.flutter.plugin.common.EventChannel.EventSink? {
+        return MaxOverlayService.sensorEventSink ?: StandardOverlayService.sensorEventSink
+    }
+
+    private fun setActiveSensorEventSink(sink: io.flutter.plugin.common.EventChannel.EventSink?) {
+        val mode = getProtectionMode()
+        if (mode == "standard") {
+            StandardOverlayService.sensorEventSink = sink
+        } else {
+            MaxOverlayService.sensorEventSink = sink
+        }
+    }
+
+    // ── Helper: Get isCalibrated from whichever service is relevant ────────
+    private fun getIsCalibrated(): Boolean {
+        val mode = getProtectionMode()
+        return if (mode == "standard") {
+            StandardOverlayService.isCalibrated
+        } else {
+            MaxOverlayService.isCalibrated
+        }
+    }
 
     // ── Flutter Engine Configuration ──────────────────────────────────────
 
@@ -99,14 +135,22 @@ class MainActivity : FlutterActivity() {
                     handleSetTolerance(tolerance, result)
                 }
                 "isServiceRunning" -> {
-                    result.success(GlanceOverlayService.isRunning)
+                    result.success(isAnyServiceRunning())
                 }
                 "isAccessibilityEnabled" -> {
-                    val isEnabled = isAccessibilityServiceEnabled(this, GlanceOverlayService::class.java)
+                    val isEnabled = isAccessibilityServiceEnabled(this, MaxOverlayService::class.java)
                     result.success(isEnabled)
                 }
                 "openAccessibilitySettings" -> {
                     openAccessibilitySettings()
+                    result.success(true)
+                }
+                "revokeAccessibility" -> {
+                    // ── Self-destruct: send REVOKE broadcast to MaxOverlayService ──
+                    sendBroadcast(Intent(MaxOverlayService.ACTION_REVOKE_ACCESSIBILITY).apply {
+                        setPackage(packageName)
+                    })
+                    Log.d(TAG, "revokeAccessibility — broadcast sent to MaxOverlayService")
                     result.success(true)
                 }
                 "isOverlayPermissionGranted" -> {
@@ -127,7 +171,7 @@ class MainActivity : FlutterActivity() {
                     val opacity = prefs.getFloat("opacity", 0.8f).toDouble()
                     val tolerance = prefs.getFloat("tolerance", 5.0f).toDouble()
                     val sensitivity = prefs.getFloat("sensitivity", 0.5f).toDouble()
-                    val isCalibrated = GlanceOverlayService.isCalibrated
+                    val isCalibrated = getIsCalibrated()
 
                     result.success(mapOf(
                         "opacity" to opacity,
@@ -152,13 +196,19 @@ class MainActivity : FlutterActivity() {
                     Log.d(TAG, "Settings saved to native: opacity=$opacity, tolerance=$tolerance, sensitivity=$sensitivity")
 
                     // Signal running Service to reload settings via broadcast
-                    if (GlanceOverlayService.isRunning) {
-                        sendBroadcast(Intent(GlanceOverlayService.ACTION_UPDATE_CONFIG).apply {
+                    if (isAnyServiceRunning()) {
+                        // Send to BOTH services — only the running one will process it
+                        sendBroadcast(Intent(MaxOverlayService.ACTION_UPDATE_CONFIG).apply {
                             setPackage(packageName)
-                            putExtra(GlanceOverlayService.EXTRA_SENSITIVITY, sensitivity.toFloat())
-                            putExtra(GlanceOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
+                            putExtra(MaxOverlayService.EXTRA_SENSITIVITY, sensitivity.toFloat())
+                            putExtra(MaxOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
                         })
-                        Log.d(TAG, "Config broadcast sent to running Service")
+                        sendBroadcast(Intent(StandardOverlayService.ACTION_UPDATE_CONFIG).apply {
+                            setPackage(packageName)
+                            putExtra(StandardOverlayService.EXTRA_SENSITIVITY, sensitivity.toFloat())
+                            putExtra(StandardOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
+                        })
+                        Log.d(TAG, "Config broadcast sent to running Service(s)")
                     }
 
                     result.success(true)
@@ -176,12 +226,15 @@ class MainActivity : FlutterActivity() {
         )
         sensorEventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                GlanceOverlayService.sensorEventSink = events
+                // Attach to both services — only the active one matters
+                MaxOverlayService.sensorEventSink = events
+                StandardOverlayService.sensorEventSink = events
                 Log.d(TAG, "Sensor stream: Flutter listener attached")
             }
 
             override fun onCancel(arguments: Any?) {
-                GlanceOverlayService.sensorEventSink = null
+                MaxOverlayService.sensorEventSink = null
+                StandardOverlayService.sensorEventSink = null
                 Log.d(TAG, "Sensor stream: Flutter listener detached")
             }
         })
@@ -192,7 +245,8 @@ class MainActivity : FlutterActivity() {
         methodChannel?.setMethodCallHandler(null)
         methodChannel = null
 
-        GlanceOverlayService.sensorEventSink = null
+        MaxOverlayService.sensorEventSink = null
+        StandardOverlayService.sensorEventSink = null
         sensorEventChannel?.setStreamHandler(null)
         sensorEventChannel = null
 
@@ -204,40 +258,22 @@ class MainActivity : FlutterActivity() {
     /**
      * Handles the "startService" command from Flutter (Connected switch).
      *
-     * IMPORTANT: This method does NOT activate the sensor or wake lock.
-     * The "Connected" switch only confirms whether the AccessibilityService
-     * is enabled. Actual shield activation (sensor + wake lock + overlay)
-     * happens ONLY via:
-     *   • "Hiệu chỉnh ngay" (Calibrate) → ACTION_CALIBRATE
-     *   • Quick Settings Tile toggle → ACTION_RESUME_SERVICE
-     *
-     * This prevents Bug #1 where the overlay auto-activated when the user
-     * simply opened the app and toggled the Connected switch.
-     *
-     * MODE AWARENESS (Bug fix):
-     *   • Standard mode: Only checks Overlay permission, skips Accessibility.
-     *     Starts sensor immediately for Beta/Gamma bars (no overlay until calibration).
+     * DUAL-ENGINE ROUTING:
+     *   • Standard mode: Only checks Overlay permission, starts StandardOverlayService
+     *     as a foreground service. No Accessibility needed.
      *   • Maximum mode: Requires Accessibility enabled. If not, guides user to settings.
+     *     Uses MaxOverlayService (AccessibilityService).
      */
     private fun handleStartService(
         result: MethodChannel.Result,
         notifTitle: String? = null,
         notifText: String? = null
     ) {
-        // Read the protection mode from Flutter SharedPreferences
-        val flutterPrefs = getSharedPreferences(
-            "FlutterSharedPreferences", Context.MODE_PRIVATE
-        )
-        val protectionMode = flutterPrefs.getString(
-            "flutter.protection_mode", "maximum"
-        ) ?: "maximum"
-
+        val protectionMode = getProtectionMode()
         Log.d(TAG, "handleStartService — protection_mode=$protectionMode")
 
         if (protectionMode == "standard") {
             // ── Standard mode: Only overlay permission needed ──────────────
-            // Skip accessibility check entirely. The overlay will use
-            // TYPE_APPLICATION_OVERLAY instead of TYPE_ACCESSIBILITY_OVERLAY.
             if (!Settings.canDrawOverlays(this)) {
                 Log.d(TAG, "Standard mode — overlay permission missing, opening settings...")
                 val intent = Intent(
@@ -255,22 +291,14 @@ class MainActivity : FlutterActivity() {
                 return
             }
 
-            // ── Standard mode: explicitly start the Service ───────────────
-            // In Standard mode, the system does NOT auto-start the service
-            // (no Accessibility enabled). The BroadcastReceiver is registered
-            // dynamically in onCreate/onServiceConnected, so sending a
-            // broadcast without starting the service first would be lost.
-            //
-            // We call startForegroundService() to ensure the service process
-            // exists, THEN send the ACTION_START_SENSOR_ONLY broadcast after
-            // a short delay to allow onCreate() to register the receiver.
-            Log.d(TAG, "Standard mode — overlay permission OK, starting service explicitly")
+            // ── Standard mode: explicitly start StandardOverlayService ─────
+            Log.d(TAG, "Standard mode — overlay permission OK, starting StandardOverlayService")
 
-            val serviceIntent = Intent(this, GlanceOverlayService::class.java).apply {
-                action = GlanceOverlayService.ACTION_START_STANDARD_MODE
-                putExtra(GlanceOverlayService.EXTRA_NOTIFICATION_TITLE,
+            val serviceIntent = Intent(this, StandardOverlayService::class.java).apply {
+                action = StandardOverlayService.ACTION_START_STANDARD_MODE
+                putExtra(StandardOverlayService.EXTRA_NOTIFICATION_TITLE,
                     notifTitle ?: "Glance đang bảo vệ")
-                putExtra(GlanceOverlayService.EXTRA_NOTIFICATION_TEXT,
+                putExtra(StandardOverlayService.EXTRA_NOTIFICATION_TEXT,
                     notifText ?: "Chế độ tiêu chuẩn đang hoạt động")
             }
             ContextCompat.startForegroundService(this, serviceIntent)
@@ -280,14 +308,11 @@ class MainActivity : FlutterActivity() {
         }
 
         // ── Maximum mode: Accessibility required ──────────────────────────
-        if (GlanceOverlayService.isAccessibilityEnabled(this)) {
-            // Accessibility is enabled — report success but do NOT
-            // send ACTION_RESUME_SERVICE. The service stays hibernated
-            // until the user explicitly taps "Hiệu chỉnh ngay" or the Tile.
-            Log.d(TAG, "Accessibility service enabled — service bound (no auto-resume)")
+        if (MaxOverlayService.isAccessibilityEnabled(this)) {
+            Log.d(TAG, "Max mode — Accessibility enabled, service bound (no auto-resume)")
 
             // Start sensor streaming for Beta/Gamma bars
-            sendBroadcast(Intent(GlanceOverlayService.ACTION_START_SENSOR_ONLY).apply {
+            sendBroadcast(Intent(MaxOverlayService.ACTION_START_SENSOR_ONLY).apply {
                 setPackage(packageName)
             })
 
@@ -296,7 +321,7 @@ class MainActivity : FlutterActivity() {
         }
 
         // Not enabled — guide user to Accessibility Settings
-        Log.d(TAG, "Accessibility service not enabled — opening settings...")
+        Log.d(TAG, "Max mode — Accessibility not enabled, opening settings...")
         pendingResult = result
         openAccessibilitySettings()
     }
@@ -304,16 +329,24 @@ class MainActivity : FlutterActivity() {
     /**
      * Handles the "stopService" command from Flutter.
      *
-     * Sends a hibernate broadcast to the service which removes the overlay
-     * and pauses the sensor — but keeps the AccessibilityService alive.
-     * NEVER calls disableSelf() or stopService() as that would crash and
-     * revoke the Accessibility permission.
+     * Sends stop/hibernate broadcast to BOTH services to ensure clean shutdown
+     * regardless of which mode is active.
      */
     private fun handleStopService(result: MethodChannel.Result) {
-        sendBroadcast(Intent(GlanceOverlayService.ACTION_STOP_SERVICE).apply {
+        // Send stop broadcast to BOTH services — only the active one will respond
+        sendBroadcast(Intent(MaxOverlayService.ACTION_STOP_SERVICE).apply {
             setPackage(packageName)
         })
-        Log.d(TAG, "Stop broadcast sent to service")
+        sendBroadcast(Intent(StandardOverlayService.ACTION_STOP_SERVICE).apply {
+            setPackage(packageName)
+        })
+
+        // For Standard mode, also explicitly stop the foreground service
+        if (StandardOverlayService.isRunning) {
+            stopService(Intent(this, StandardOverlayService::class.java))
+        }
+
+        Log.d(TAG, "Stop broadcast sent to both services")
         result.success(true)
     }
 
@@ -321,10 +354,14 @@ class MainActivity : FlutterActivity() {
      * Sends a calibration command via broadcast to the running service.
      */
     private fun handleCalibrate(result: MethodChannel.Result) {
-        sendBroadcast(Intent(GlanceOverlayService.ACTION_CALIBRATE).apply {
+        // Send to both — only the active one processes it
+        sendBroadcast(Intent(MaxOverlayService.ACTION_CALIBRATE).apply {
             setPackage(packageName)
         })
-        Log.d(TAG, "Calibrate broadcast sent to service")
+        sendBroadcast(Intent(StandardOverlayService.ACTION_CALIBRATE).apply {
+            setPackage(packageName)
+        })
+        Log.d(TAG, "Calibrate broadcast sent to service(s)")
         result.success(true)
     }
 
@@ -332,9 +369,13 @@ class MainActivity : FlutterActivity() {
      * Sends the updated sensitivity value via broadcast to the running service.
      */
     private fun handleSetSensitivity(value: Double, result: MethodChannel.Result) {
-        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_SENSITIVITY).apply {
+        sendBroadcast(Intent(MaxOverlayService.ACTION_SET_SENSITIVITY).apply {
             setPackage(packageName)
-            putExtra(GlanceOverlayService.EXTRA_SENSITIVITY, value.toFloat())
+            putExtra(MaxOverlayService.EXTRA_SENSITIVITY, value.toFloat())
+        })
+        sendBroadcast(Intent(StandardOverlayService.ACTION_SET_SENSITIVITY).apply {
+            setPackage(packageName)
+            putExtra(StandardOverlayService.EXTRA_SENSITIVITY, value.toFloat())
         })
         Log.d(TAG, "Sensitivity broadcast: $value")
         result.success(true)
@@ -344,9 +385,13 @@ class MainActivity : FlutterActivity() {
      * Sends the overlay mode via broadcast to the running service.
      */
     private fun handleSetOverlayMode(mode: String, result: MethodChannel.Result) {
-        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_OVERLAY_MODE).apply {
+        sendBroadcast(Intent(MaxOverlayService.ACTION_SET_OVERLAY_MODE).apply {
             setPackage(packageName)
-            putExtra(GlanceOverlayService.EXTRA_MODE, mode)
+            putExtra(MaxOverlayService.EXTRA_MODE, mode)
+        })
+        sendBroadcast(Intent(StandardOverlayService.ACTION_SET_OVERLAY_MODE).apply {
+            setPackage(packageName)
+            putExtra(StandardOverlayService.EXTRA_MODE, mode)
         })
         Log.d(TAG, "Overlay mode broadcast: $mode")
         result.success(true)
@@ -362,12 +407,19 @@ class MainActivity : FlutterActivity() {
         height: Int,
         result: MethodChannel.Result
     ) {
-        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_TARGETED_AREA).apply {
+        sendBroadcast(Intent(MaxOverlayService.ACTION_SET_TARGETED_AREA).apply {
             setPackage(packageName)
-            putExtra(GlanceOverlayService.EXTRA_AREA_X, x)
-            putExtra(GlanceOverlayService.EXTRA_AREA_Y, y)
-            putExtra(GlanceOverlayService.EXTRA_AREA_WIDTH, width)
-            putExtra(GlanceOverlayService.EXTRA_AREA_HEIGHT, height)
+            putExtra(MaxOverlayService.EXTRA_AREA_X, x)
+            putExtra(MaxOverlayService.EXTRA_AREA_Y, y)
+            putExtra(MaxOverlayService.EXTRA_AREA_WIDTH, width)
+            putExtra(MaxOverlayService.EXTRA_AREA_HEIGHT, height)
+        })
+        sendBroadcast(Intent(StandardOverlayService.ACTION_SET_TARGETED_AREA).apply {
+            setPackage(packageName)
+            putExtra(StandardOverlayService.EXTRA_AREA_X, x)
+            putExtra(StandardOverlayService.EXTRA_AREA_Y, y)
+            putExtra(StandardOverlayService.EXTRA_AREA_WIDTH, width)
+            putExtra(StandardOverlayService.EXTRA_AREA_HEIGHT, height)
         })
         Log.d(TAG, "Targeted area broadcast: x=$x, y=$y, w=$width, h=$height")
         result.success(true)
@@ -377,9 +429,13 @@ class MainActivity : FlutterActivity() {
      * Sends the overlay intensity via broadcast to the running service.
      */
     private fun handleSetIntensity(intensity: Double, result: MethodChannel.Result) {
-        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_INTENSITY).apply {
+        sendBroadcast(Intent(MaxOverlayService.ACTION_SET_INTENSITY).apply {
             setPackage(packageName)
-            putExtra(GlanceOverlayService.EXTRA_INTENSITY, intensity.toFloat())
+            putExtra(MaxOverlayService.EXTRA_INTENSITY, intensity.toFloat())
+        })
+        sendBroadcast(Intent(StandardOverlayService.ACTION_SET_INTENSITY).apply {
+            setPackage(packageName)
+            putExtra(StandardOverlayService.EXTRA_INTENSITY, intensity.toFloat())
         })
         Log.d(TAG, "Intensity broadcast: $intensity")
         result.success(true)
@@ -389,9 +445,13 @@ class MainActivity : FlutterActivity() {
      * Sends the tolerance value via broadcast to the running service.
      */
     private fun handleSetTolerance(tolerance: Double, result: MethodChannel.Result) {
-        sendBroadcast(Intent(GlanceOverlayService.ACTION_SET_TOLERANCE).apply {
+        sendBroadcast(Intent(MaxOverlayService.ACTION_SET_TOLERANCE).apply {
             setPackage(packageName)
-            putExtra(GlanceOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
+            putExtra(MaxOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
+        })
+        sendBroadcast(Intent(StandardOverlayService.ACTION_SET_TOLERANCE).apply {
+            setPackage(packageName)
+            putExtra(StandardOverlayService.EXTRA_TOLERANCE, tolerance.toFloat())
         })
         Log.d(TAG, "Tolerance broadcast: $tolerance°")
         result.success(true)
@@ -401,16 +461,6 @@ class MainActivity : FlutterActivity() {
 
     /**
      * Robust helper to check if a specific AccessibilityService is enabled.
-     *
-     * Parses the colon-separated ENABLED_ACCESSIBILITY_SERVICES setting
-     * using [TextUtils.SimpleStringSplitter] and compares each entry as
-     * a [ComponentName] object via [ComponentName.unflattenFromString].
-     *
-     * This handles both short-form ("pkg/.Class") and full-form
-     * ("pkg/pkg.Class") representations that different OEMs store.
-     *
-     * Serves as the single source of truth for the MethodChannel
-     * "isAccessibilityEnabled" call from Flutter.
      */
     private fun isAccessibilityServiceEnabled(
         context: Context,
@@ -438,7 +488,7 @@ class MainActivity : FlutterActivity() {
 
     /**
      * Opens the Android Accessibility Settings screen so the user can
-     * enable/disable the GlanceOverlayService.
+     * enable/disable the MaxOverlayService.
      */
     private fun openAccessibilitySettings() {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
@@ -451,7 +501,7 @@ class MainActivity : FlutterActivity() {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == ACCESSIBILITY_SETTINGS_REQUEST) {
-            if (isAccessibilityServiceEnabled(this, GlanceOverlayService::class.java)) {
+            if (isAccessibilityServiceEnabled(this, MaxOverlayService::class.java)) {
                 pendingResult?.success(true)
                 Log.d(TAG, "Accessibility service enabled by user")
             } else {

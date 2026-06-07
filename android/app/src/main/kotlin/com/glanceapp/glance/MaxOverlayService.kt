@@ -1,0 +1,517 @@
+package com.glanceapp.glance
+
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.PowerManager
+import android.provider.Settings
+import android.service.quicksettings.TileService
+import android.text.TextUtils
+import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
+
+/**
+ * MaxOverlayService — Accessibility-based Privacy Shield (Maximum Mode)
+ *
+ * Extends [AccessibilityService] to obtain TYPE_ACCESSIBILITY_OVERLAY
+ * privilege. This bypasses Android 12+'s "Untrusted Touch Blocker",
+ * allowing alpha up to 242 (95%) with full touch pass-through.
+ *
+ * ⚠️ WARNING: Banking apps may refuse to run while this service is enabled.
+ *
+ * ┌──────────────────────────────────────────────────────────────────────┐
+ * │  DUAL-ENGINE ARCHITECTURE — MAX ENGINE                              │
+ * │                                                                    │
+ * │  • Uses TYPE_ACCESSIBILITY_OVERLAY (trusted window)                 │
+ * │  • Alpha capped at 242 (95%) — pitch black, smooth                 │
+ * │  • Requires Accessibility + Overlay permissions                     │
+ * │  • FLAG_NOT_TOUCHABLE for full touch pass-through                   │
+ * │  • No foreground notification required (system-managed lifecycle)   │
+ * └──────────────────────────────────────────────────────────────────────┘
+ */
+class MaxOverlayService : AccessibilityService(), SensorEventListener {
+
+    companion object {
+        private const val TAG = "MaxOverlayService"
+
+        @Volatile
+        @JvmStatic
+        var isRunning: Boolean = false
+            private set
+
+        @JvmStatic
+        var isCalibrated: Boolean = false
+
+        @JvmStatic
+        var sensorEventSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+
+        // ── Action constants (shared across both engines) ─────────────────
+        const val ACTION_UPDATE_CONFIG = "com.glanceapp.glance.UPDATE_CONFIG"
+        const val ACTION_STOP_SERVICE = "com.glanceapp.glance.STOP_SERVICE"
+        const val ACTION_RESUME_SERVICE = "com.glanceapp.glance.RESUME_SERVICE"
+        const val ACTION_CALIBRATE = "com.glanceapp.glance.CALIBRATE"
+        const val ACTION_SET_SENSITIVITY = "com.glanceapp.glance.SET_SENSITIVITY"
+        const val ACTION_SET_OVERLAY_MODE = "com.glanceapp.glance.SET_OVERLAY_MODE"
+        const val ACTION_SET_TARGETED_AREA = "com.glanceapp.glance.SET_TARGETED_AREA"
+        const val ACTION_SET_TOLERANCE = "com.glanceapp.glance.SET_TOLERANCE"
+
+        // Sensor-only mode: start sensor streaming without activating overlay
+        const val ACTION_START_SENSOR_ONLY = "com.glanceapp.glance.START_SENSOR_ONLY"
+
+        // Self-destruct: revoke accessibility permission by calling disableSelf()
+        const val ACTION_REVOKE_ACCESSIBILITY = "com.glanceapp.glance.REVOKE_ACCESSIBILITY"
+
+        // Dummy constants — kept so MainActivity compiles without changes
+        const val ACTION_SET_INTENSITY = "com.glanceapp.glance.SET_INTENSITY"
+        const val EXTRA_INTENSITY = "intensity"
+        const val EXTRA_NOTIFICATION_TITLE = "notification_title"
+        const val EXTRA_NOTIFICATION_TEXT = "notification_text"
+
+        const val EXTRA_SENSITIVITY = "sensitivity"
+        const val EXTRA_MODE = "mode"
+        const val EXTRA_TOLERANCE = "tolerance"
+        const val EXTRA_AREA_X = "area_x"
+        const val EXTRA_AREA_Y = "area_y"
+        const val EXTRA_AREA_WIDTH = "area_width"
+        const val EXTRA_AREA_HEIGHT = "area_height"
+
+        private const val PREFS_NAME = "GlancePrefs"
+        private const val KEY_SENSITIVITY = "sensor_sensitivity"
+        private const val KEY_TOLERANCE = "sensor_tolerance"
+
+        // ── Max Alpha for Maximum mode ────────────────────────────────────
+        // 230 = ~90% opacity on AMOLED. Allows faint content visibility
+        // beneath the shield while remaining highly effective.
+        private const val MAX_ALPHA = 230
+
+        /**
+         * Checks whether this AccessibilityService is currently enabled
+         * in the device's Accessibility Settings.
+         */
+        @JvmStatic
+        fun isAccessibilityEnabled(context: Context): Boolean {
+            val expectedComponentName = ComponentName(context, MaxOverlayService::class.java)
+            val enabledServicesSetting = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+
+            val colonSplitter = TextUtils.SimpleStringSplitter(':')
+            colonSplitter.setString(enabledServicesSetting)
+            while (colonSplitter.hasNext()) {
+                val componentNameString = colonSplitter.next()
+                val enabledService = ComponentName.unflattenFromString(componentNameString)
+                if (enabledService != null && enabledService == expectedComponentName) {
+                    return true
+                }
+            }
+            return false
+        }
+    }
+
+    // ── System services ───────────────────────────────────────────────────
+    private lateinit var windowManager: WindowManager
+    private var sensorManager: SensorManager? = null
+    private var rotationSensor: Sensor? = null
+    private var powerManager: PowerManager? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    // ── Overlay views ─────────────────────────────────────────────────────
+    private val overlayViews: MutableList<View> = mutableListOf()
+
+    // ── Sensor configuration ──────────────────────────────────────────────
+    private var sensorSensitivity: Float = 0.5f
+    private var sensorTolerance: Float = 0.2f
+
+    private var isOverlayShowing = false
+    private var lastSensorStreamTime: Long = 0L
+
+    // ── Baseline calibration state ────────────────────────────────────────
+    private var needsBaselineReset: Boolean = true
+    private var baselineRoll: Float = 0f
+
+    // ── EMA-smoothed alpha (directly controls overlay opacity) ────────────
+    private var currentDisplayedAlpha: Float = 0f
+
+    // ── BroadcastReceiver for runtime config changes ──────────────────────
+    private val configReceiver = object : BroadcastReceiver() {
+        private fun getSafeFloat(intent: Intent, key: String, defaultVal: Float): Float {
+            val value = intent.extras?.get(key)
+            return when (value) {
+                is Number -> value.toFloat()
+                is String -> value.toFloatOrNull() ?: defaultVal
+                else -> defaultVal
+            }
+        }
+
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent == null) return
+            when (intent.action) {
+                ACTION_UPDATE_CONFIG -> {
+                    sensorSensitivity = getSafeFloat(intent, EXTRA_SENSITIVITY, sensorSensitivity)
+                    sensorTolerance = getSafeFloat(intent, EXTRA_TOLERANCE, sensorTolerance)
+                    if (isOverlayShowing) applyAlphaToOverlay(MAX_ALPHA)
+                }
+                ACTION_SET_SENSITIVITY -> sensorSensitivity = getSafeFloat(intent, EXTRA_SENSITIVITY, sensorSensitivity)
+                ACTION_SET_TOLERANCE -> sensorTolerance = getSafeFloat(intent, EXTRA_TOLERANCE, sensorTolerance)
+                ACTION_CALIBRATE -> {
+                    loadSavedConfig()
+                    needsBaselineReset = true
+                    isCalibrated = true
+                    removeOverlayView()
+                    isOverlayShowing = false
+
+                    if (!isRunning) {
+                        isRunning = true
+                        rotationSensor?.let {
+                            sensorManager?.registerListener(
+                                this@MaxOverlayService, it,
+                                SensorManager.SENSOR_DELAY_FASTEST
+                            )
+                        }
+                        wakeLock?.let { if (it.isHeld) it.release() }
+                        wakeLock = powerManager?.newWakeLock(
+                            PowerManager.PARTIAL_WAKE_LOCK,
+                            "Glance::MaxShieldWakeLock"
+                        )?.apply {
+                            acquire(10 * 60 * 1000L)
+                        }
+                        notifyTileStateChanged()
+                    }
+                    Log.d(TAG, "CALIBRATE — config reloaded, baseline reset, overlay hidden, isRunning=$isRunning")
+                }
+                ACTION_STOP_SERVICE -> {
+                    isOverlayShowing = false
+                    isRunning = false
+                    removeOverlayView()
+                    sensorManager?.unregisterListener(this@MaxOverlayService)
+                    wakeLock?.let { if (it.isHeld) it.release() }
+                    Log.d(TAG, "Shield HIBERNATED — overlay removed, sensor paused, wake lock released, service still alive")
+                    notifyTileStateChanged()
+                }
+                ACTION_START_SENSOR_ONLY -> {
+                    if (!isRunning) {
+                        isRunning = true
+                        needsBaselineReset = true
+                        currentDisplayedAlpha = 0f
+                        rotationSensor?.let {
+                            sensorManager?.registerListener(
+                                this@MaxOverlayService, it,
+                                SensorManager.SENSOR_DELAY_FASTEST
+                            )
+                        }
+                        wakeLock?.let { if (it.isHeld) it.release() }
+                        wakeLock = powerManager?.newWakeLock(
+                            PowerManager.PARTIAL_WAKE_LOCK,
+                            "Glance::SensorWakeLock"
+                        )?.apply {
+                            acquire(10 * 60 * 1000L)
+                        }
+                        Log.d(TAG, "START_SENSOR_ONLY — sensor registered, streaming Beta/Gamma, overlay NOT active")
+                    } else {
+                        Log.d(TAG, "START_SENSOR_ONLY — sensor already running, no-op")
+                    }
+                }
+                ACTION_RESUME_SERVICE -> {
+                    loadSavedConfig()
+                    needsBaselineReset = true
+                    removeOverlayView()
+                    isOverlayShowing = false
+
+                    if (!isRunning) {
+                        isRunning = true
+                        rotationSensor?.let {
+                            sensorManager?.registerListener(
+                                this@MaxOverlayService, it,
+                                SensorManager.SENSOR_DELAY_FASTEST
+                            )
+                        }
+                        wakeLock?.let { if (it.isHeld) it.release() }
+                        wakeLock = powerManager?.newWakeLock(
+                            PowerManager.PARTIAL_WAKE_LOCK,
+                            "Glance::MaxShieldWakeLock"
+                        )?.apply {
+                            acquire(10 * 60 * 1000L)
+                        }
+                        notifyTileStateChanged()
+                    }
+                    Log.d(TAG, "Shield RESUMED — config reloaded, baseline reset, overlay hidden, isRunning=$isRunning")
+                }
+                ACTION_REVOKE_ACCESSIBILITY -> {
+                    // ── Self-destruct sequence ─────────────────────────────
+                    // 1. Stop overlay & sensor
+                    isOverlayShowing = false
+                    isRunning = false
+                    removeOverlayView()
+                    sensorManager?.unregisterListener(this@MaxOverlayService)
+                    wakeLock?.let { if (it.isHeld) it.release() }
+                    Log.d(TAG, "REVOKE_ACCESSIBILITY — overlay removed, sensor stopped")
+
+                    // 2. Call disableSelf() to revoke Accessibility permission
+                    //    This causes Android to remove the service from the
+                    //    enabled accessibility services list immediately.
+                    try {
+                        disableSelf()
+                        Log.d(TAG, "disableSelf() called — Accessibility permission revoked")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "disableSelf() failed: ${e.message}")
+                    }
+                    notifyTileStateChanged()
+                }
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  AccessibilityService Lifecycle
+    // ══════════════════════════════════════════════════════════════════════
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.d(TAG, "onServiceConnected — Max Accessibility Service activated")
+
+        isRunning = false
+        isOverlayShowing = false
+
+        serviceInfo = serviceInfo?.apply {
+            eventTypes = AccessibilityEvent.TYPES_ALL_MASK.inv().toInt()
+            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+            flags = AccessibilityServiceInfo.DEFAULT
+            notificationTimeout = 0
+        } ?: serviceInfo
+
+        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+
+        rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+            ?: sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+
+        val filter = IntentFilter().apply {
+            addAction(ACTION_UPDATE_CONFIG)
+            addAction(ACTION_STOP_SERVICE)
+            addAction(ACTION_RESUME_SERVICE)
+            addAction(ACTION_CALIBRATE)
+            addAction(ACTION_SET_SENSITIVITY)
+            addAction(ACTION_SET_OVERLAY_MODE)
+            addAction(ACTION_SET_TARGETED_AREA)
+            addAction(ACTION_SET_TOLERANCE)
+            addAction(ACTION_START_SENSOR_ONLY)
+            addAction(ACTION_REVOKE_ACCESSIBILITY)
+        }
+        registerReceiver(configReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+
+        loadSavedConfig()
+        notifyTileStateChanged()
+
+        Log.d(TAG, "Initialization complete — HIBERNATED, waiting for RESUME broadcast")
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // No-op: we only use AccessibilityService for TYPE_ACCESSIBILITY_OVERLAY
+    }
+
+    override fun onInterrupt() {
+        Log.d(TAG, "onInterrupt called")
+    }
+
+    override fun onDestroy() {
+        Log.d(TAG, "onDestroy — cleaning up")
+        isRunning = false
+        try { unregisterReceiver(configReceiver) } catch (_: Exception) {}
+        sensorManager?.unregisterListener(this)
+        removeOverlayView()
+        wakeLock?.let { if (it.isHeld) it.release() }
+        notifyTileStateChanged()
+        super.onDestroy()
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  Sensor handling
+    // ══════════════════════════════════════════════════════════════════════
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event == null || event.sensor.type != rotationSensor?.type) return
+        if (!isRunning) return
+
+        // ── 1. Extract raw orientation from rotation vector ───────────────
+        val rotationMatrix = FloatArray(9)
+        SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+
+        val orientationValues = FloatArray(3)
+        SensorManager.getOrientation(rotationMatrix, orientationValues)
+
+        val rawPitchDeg = Math.toDegrees(orientationValues[1].toDouble()).toFloat()
+        val rawRollDeg = Math.toDegrees(orientationValues[2].toDouble()).toFloat()
+
+        // ── 2. Baseline capture on first sample after calibration ─────────
+        if (needsBaselineReset) {
+            baselineRoll = rawRollDeg
+            currentDisplayedAlpha = 0f
+            needsBaselineReset = false
+            Log.d(TAG, "Baseline captured — roll=$rawRollDeg°")
+        }
+
+        val relativeRoll = rawRollDeg - baselineRoll
+        val absRoll = Math.abs(relativeRoll)
+
+        // ── 3. Stream raw sensor data to Flutter UI ───────────────────────
+        broadcastSensorToFlutter(rawPitchDeg.toDouble(), relativeRoll.toDouble())
+
+        // ── 4. Compute Target Alpha from tilt deviation ───────────────────
+        val toleranceThreshold = 15f + (sensorTolerance * 30f)
+        val maxAngleRange = 40f
+
+        val targetAlpha: Float = if (absRoll > toleranceThreshold) {
+            val deviation = absRoll - toleranceThreshold
+            val ratio = (deviation / maxAngleRange).coerceIn(0f, 1f)
+            ratio * MAX_ALPHA
+        } else {
+            0f
+        }
+
+        // ── 5. EMA smoothing on alpha value (coefficient 0.04) ────────────
+        currentDisplayedAlpha += 0.04f * (targetAlpha - currentDisplayedAlpha)
+
+        // ── 6. UI decision: show/hide overlay based on smoothed alpha ─────
+        if (currentDisplayedAlpha > 1f) {
+            if (!isOverlayShowing) {
+                isOverlayShowing = true
+                createOverlayView()
+            }
+            applyAlphaToOverlay(currentDisplayedAlpha.toInt())
+        } else {
+            if (isOverlayShowing) {
+                isOverlayShowing = false
+                removeOverlayView()
+            }
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  Overlay management — TYPE_ACCESSIBILITY_OVERLAY
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Applies the given alpha value directly to all overlay views.
+     * @param alpha Pre-computed EMA-smoothed alpha (0–MAX_ALPHA).
+     */
+    private fun applyAlphaToOverlay(alpha: Int) {
+        if (overlayViews.isEmpty()) return
+
+        val safeAlpha = alpha.coerceIn(0, MAX_ALPHA)
+        val shieldColor = Color.argb(safeAlpha, 0, 0, 0)
+
+        overlayViews.forEach { view ->
+            view.setBackgroundColor(shieldColor)
+        }
+    }
+
+    /**
+     * Creates the overlay using TYPE_ACCESSIBILITY_OVERLAY (trusted window).
+     * Uses 2 layers (Dual Shield) for maximum darkness.
+     */
+    private fun createOverlayView() {
+        if (overlayViews.isNotEmpty()) return
+
+        try {
+            for (i in 0 until 2) {
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                }
+
+                val view = View(this).apply {
+                    setBackgroundColor(Color.argb(0, 0, 0, 0))
+                    alpha = 1f
+                    @Suppress("DEPRECATION")
+                    systemUiVisibility = (
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    )
+                }
+                windowManager.addView(view, params)
+                overlayViews.add(view)
+            }
+            Log.d(TAG, "Max Shield created — 2 layers, TYPE_ACCESSIBILITY_OVERLAY, maxAlpha=$MAX_ALPHA")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create Max Shield overlay: ${e.message}")
+            removeOverlayView()
+        }
+    }
+
+    private fun removeOverlayView() {
+        overlayViews.forEach { view ->
+            try {
+                windowManager.removeView(view)
+            } catch (_: Exception) {}
+        }
+        overlayViews.clear()
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  Sensor → Flutter streaming
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun broadcastSensorToFlutter(pitch: Double, roll: Double) {
+        val now = System.currentTimeMillis()
+        if (now - lastSensorStreamTime < 100L) return
+        lastSensorStreamTime = now
+
+        val sink = sensorEventSink ?: return
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                sink.success(mapOf("beta" to pitch, "gamma" to roll))
+            } catch (_: Exception) {}
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  Config helpers
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun loadSavedConfig() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        sensorSensitivity = prefs.getFloat(KEY_SENSITIVITY, 0.5f)
+        sensorTolerance = prefs.getFloat(KEY_TOLERANCE, 0.2f)
+        Log.d(TAG, "Config loaded — sensitivity=$sensorSensitivity, tolerance=$sensorTolerance")
+    }
+
+    private fun notifyTileStateChanged() {
+        try {
+            TileService.requestListeningState(
+                this,
+                ComponentName(this, GlanceTileService::class.java)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to notify tile: ${e.message}")
+        }
+    }
+}

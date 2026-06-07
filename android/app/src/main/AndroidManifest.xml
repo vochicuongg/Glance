@@ -45,16 +45,16 @@
         </activity>
 
         <!-- ════════════════════════════════════════════════════════════════
-             GLANCE OVERLAY SERVICE (Accessibility Service)
+             MAX OVERLAY SERVICE (Accessibility Service — Maximum Mode)
              Uses TYPE_ACCESSIBILITY_OVERLAY to bypass Android 12+
-             Untrusted Touch Blocker, allowing Alpha 255 (Pitch Black)
+             Untrusted Touch Blocker, allowing Alpha 242 (95% opacity)
              with full touch pass-through via FLAG_NOT_TOUCHABLE.
+             ⚠️ Banking apps may refuse to run while this service is enabled.
              ════════════════════════════════════════════════════════════════ -->
         <service
-            android:name=".GlanceOverlayService"
+            android:name=".MaxOverlayService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -62,9 +62,22 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_config" />
+        </service>
+
+        <!-- ════════════════════════════════════════════════════════════════
+             STANDARD OVERLAY SERVICE (Regular Foreground Service — Standard Mode)
+             Uses TYPE_APPLICATION_OVERLAY with Alpha capped at 204 (80%).
+             Only requires SYSTEM_ALERT_WINDOW — no Accessibility needed.
+             Banking apps work normally with this service.
+             ════════════════════════════════════════════════════════════════ -->
+        <service
+            android:name=".StandardOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Screen privacy overlay and sensor monitoring" />
+                android:value="Screen privacy overlay and sensor monitoring (standard mode)" />
         </service>
 
         <!-- ════════════════════════════════════════════════════════════════

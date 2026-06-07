@@ -406,6 +406,27 @@ class GlanceChannelService {
     return {'opacity': 0.8, 'tolerance': 5.0, 'sensitivity': 0.5, 'isCalibrated': false};
   }
 
+  /// Revokes the Accessibility permission for MaxOverlayService by calling
+  /// disableSelf() on the native side. This effectively "kills" the Max Mode
+  /// engine, removing the overlay and unregistering the accessibility service.
+  ///
+  /// Called when the user switches from Maximum mode to Standard mode,
+  /// ensuring the accessibility permission is immediately revoked without
+  /// requiring the user to manually disable it in Settings.
+  ///
+  /// Returns `true` if the revoke broadcast was sent successfully.
+  static Future<bool> revokeAccessibility() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('revokeAccessibility');
+      return result ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (e) {
+      debugPrint('Failed to revoke accessibility: ${e.message}');
+      return false;
+    }
+  }
+
   /// Saves the current opacity and tolerance settings to native SharedPreferences.
   ///
   /// This allows the Quick Settings Tile (GlanceTileService) to read the

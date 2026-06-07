@@ -51,30 +51,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _switchMode(String newMode) async {
     if (newMode == _protectionMode) return;
 
-    // ── IMPORTANT: Do NOT save protection_mode to SharedPreferences yet! ──
-    // We must wait until permissions are fully verified. If the app is
-    // killed while the user is in system Settings (common on low-memory
-    // devices), a premature save would cause the app to restart into a
-    // PermissionScreen without fromSettings=true, leading to incorrect
-    // navigation (ModeSelectionScreen instead of Dashboard).
     final prefs = await SharedPreferences.getInstance();
     final oldMode = _protectionMode;
 
-    // Check permissions for the new mode
-    final hasOverlay = await GlanceChannelService.isOverlayPermissionGranted();
+    if (newMode == 'standard') {
+      // ══════════════════════════════════════════════════════════════════
+      //  MAX → STANDARD: Auto-Revoke Accessibility immediately
+      // ══════════════════════════════════════════════════════════════════
+      // 1. Revoke Accessibility permission FIRST (disableSelf on native)
+      //    This kills the MaxOverlayService engine immediately.
+      await GlanceChannelService.revokeAccessibility();
 
-    if (newMode == 'maximum') {
-      // Maximum mode needs both accessibility + overlay
+      // 2. Save the new mode to SharedPreferences AFTER revoking
+      await prefs.setString('protection_mode', newMode);
+      if (!mounted) return;
+      setState(() => _protectionMode = newMode);
+
+      // 3. Check overlay permission (Standard mode still needs it)
+      final hasOverlay =
+          await GlanceChannelService.isOverlayPermissionGranted();
+
+      if (!hasOverlay) {
+        // Missing overlay → navigate to PermissionScreen to request it
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+              builder: (_) => const PermissionScreen(fromSettings: true)),
+        );
+
+        // After returning, re-check overlay
+        if (!mounted) return;
+        final recheckOverlay =
+            await GlanceChannelService.isOverlayPermissionGranted();
+
+        if (!recheckOverlay) {
+          // User didn't grant overlay → revert to old mode
+          await prefs.setString('protection_mode', oldMode);
+          if (!mounted) return;
+          setState(() => _protectionMode = oldMode);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Chưa đủ quyền. Đã giữ chế độ Tối đa.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã chuyển sang chế độ Tiêu chuẩn'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      // ══════════════════════════════════════════════════════════════════
+      //  STANDARD → MAX: Save mode, then go to PermissionScreen
+      // ══════════════════════════════════════════════════════════════════
+      // 1. Save mode first so PermissionScreen's Gatekeeper can read it
+      await prefs.setString('protection_mode', newMode);
+      if (!mounted) return;
+      setState(() => _protectionMode = newMode);
+
+      // 2. Check if all permissions are already granted
       final hasAccessibility =
           await GlanceChannelService.isAccessibilityEnabled();
+      final hasOverlay =
+          await GlanceChannelService.isOverlayPermissionGranted();
 
       if (!hasAccessibility || !hasOverlay) {
-        // Missing permissions → temporarily save new mode for PermissionScreen
-        // to read, then navigate to it
-        await prefs.setString('protection_mode', newMode);
-        if (!mounted) return;
-        setState(() => _protectionMode = newMode);
-
+        // 3. Missing permissions → navigate to PermissionScreen
+        //    The Gatekeeper will scan and request user to enable them.
         await Navigator.of(context).push(
           MaterialPageRoute(
               builder: (_) => const PermissionScreen(fromSettings: true)),
@@ -101,53 +149,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return;
         }
       }
-    } else {
-      // Standard mode only needs overlay
-      if (!hasOverlay) {
-        await prefs.setString('protection_mode', newMode);
-        if (!mounted) return;
-        setState(() => _protectionMode = newMode);
 
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-              builder: (_) => const PermissionScreen(fromSettings: true)),
-        );
-
-        // After returning, re-check
-        if (!mounted) return;
-        final recheckOverlay =
-            await GlanceChannelService.isOverlayPermissionGranted();
-
-        if (!recheckOverlay) {
-          // Revert
-          await prefs.setString('protection_mode', oldMode);
-          if (!mounted) return;
-          setState(() => _protectionMode = oldMode);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Chưa đủ quyền. Đã giữ chế độ Tối đa.'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        }
-      }
-    }
-
-    // All permissions OK → now safely persist the mode change
-    await prefs.setString('protection_mode', newMode);
-    if (!mounted) return;
-    setState(() => _protectionMode = newMode);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          newMode == 'standard'
-              ? 'Đã chuyển sang chế độ Tiêu chuẩn'
-              : 'Đã chuyển sang chế độ Tối đa',
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã chuyển sang chế độ Tối đa'),
+          behavior: SnackBarBehavior.floating,
         ),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    }
   }
 
   @override
