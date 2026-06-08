@@ -500,12 +500,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               actions: [
                 // Settings button — navigates to SettingsScreen
                 IconButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
+                  onPressed: () async {
+                    await Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const SettingsScreen(),
                       ),
                     );
+                    _loadSavedSettings();
                   },
                   icon: Icon(
                     Icons.settings_rounded,

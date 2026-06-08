@@ -244,87 +244,145 @@ class StandardOverlayService : Service(), SensorEventListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_START_STANDARD_MODE) {
-            Log.d(TAG, "onStartCommand — Standard mode start requested")
+        val action = intent?.action
+        Log.d(TAG, "onStartCommand — action=$action")
 
-            // 1. Create notification channel + show foreground notification
-            createNotificationChannel()
-            val notifTitle = intent.getStringExtra(EXTRA_NOTIFICATION_TITLE) ?: "Glance đang bảo vệ"
-            val notifText = intent.getStringExtra(EXTRA_NOTIFICATION_TEXT) ?: "Chế độ tiêu chuẩn đang hoạt động"
-            val notification = Notification.Builder(this, NOTIF_CHANNEL_ID)
-                .setContentTitle(notifTitle)
-                .setContentText(notifText)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-                .setOngoing(true)
-                .build()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIF_ID,
-                    notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                )
-            } else {
-                startForeground(NOTIF_ID, notification)
-            }
+        // ── STEP 1: ALWAYS promote to foreground IMMEDIATELY ──────────────
+        // This MUST happen within 5 seconds of startForegroundService() call,
+        // regardless of which action triggered the start. Failing to do so
+        // causes ForegroundServiceDidNotStartInTimeException (fatal crash).
+        promoteToForeground(intent)
 
-            // 2. Initialize system services
-            if (windowManager == null) {
-                windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            }
-            if (sensorManager == null) {
-                sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-            }
-            if (powerManager == null) {
-                powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            }
-            if (rotationSensor == null) {
-                rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
-                    ?: sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-            }
+        // ── STEP 2: Initialize system services (idempotent) ───────────────
+        initSystemServices()
 
-            // 3. Register BroadcastReceiver for runtime config
-            if (!receiverRegistered) {
-                try {
-                    val filter = IntentFilter().apply {
-                        addAction(ACTION_UPDATE_CONFIG)
-                        addAction(ACTION_STOP_SERVICE)
-                        addAction(ACTION_RESUME_SERVICE)
-                        addAction(ACTION_CALIBRATE)
-                        addAction(ACTION_SET_SENSITIVITY)
-                        addAction(ACTION_SET_OVERLAY_MODE)
-                        addAction(ACTION_SET_TARGETED_AREA)
-                        addAction(ACTION_SET_TOLERANCE)
-                        addAction(ACTION_START_SENSOR_ONLY)
-                    }
-                    registerReceiver(configReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-                    receiverRegistered = true
-                } catch (_: Exception) {
-                    // Already registered — ignore
+        // ── STEP 3: Register BroadcastReceiver (idempotent) ───────────────
+        registerConfigReceiver()
+
+        // ── STEP 4: Route based on action ─────────────────────────────────
+        when (action) {
+            ACTION_START_STANDARD_MODE, ACTION_RESUME_SERVICE -> {
+                Log.d(TAG, "Starting/Resuming standard shield")
+                loadSavedConfig()
+                isRunning = true
+                needsBaselineReset = true
+                currentDisplayedAlpha = 0f
+
+                rotationSensor?.let {
+                    sensorManager?.registerListener(
+                        this, it, SensorManager.SENSOR_DELAY_GAME
+                    )
                 }
+
+                wakeLock?.let { if (it.isHeld) it.release() }
+                wakeLock = powerManager?.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "Glance::StandardWakeLock"
+                )?.apply { acquire(10 * 60 * 1000L) }
+
+                notifyTileStateChanged()
+                Log.d(TAG, "Standard mode initialized — sensor streaming, overlay ready on calibration")
             }
-
-            // 4. Load config & start sensor streaming
-            loadSavedConfig()
-            isRunning = true
-            needsBaselineReset = true
-            currentDisplayedAlpha = 0f
-
-            rotationSensor?.let {
-                sensorManager?.registerListener(
-                    this, it, SensorManager.SENSOR_DELAY_GAME
-                )
+            ACTION_STOP_SERVICE -> {
+                // If stop was delivered via startForegroundService intent,
+                // we already promoted above (safe), now just tear down.
+                Log.d(TAG, "STOP action received via onStartCommand — stopping self")
+                isOverlayShowing = false
+                isRunning = false
+                removeOverlayView()
+                sensorManager?.unregisterListener(this)
+                wakeLock?.let { if (it.isHeld) it.release() }
+                notifyTileStateChanged()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
             }
-
-            wakeLock?.let { if (it.isHeld) it.release() }
-            wakeLock = powerManager?.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "Glance::StandardWakeLock"
-            )?.apply { acquire(10 * 60 * 1000L) }
-
-            notifyTileStateChanged()
-            Log.d(TAG, "Standard mode initialized — sensor streaming, overlay ready on calibration")
+            else -> {
+                Log.d(TAG, "Unknown or null action — service promoted to foreground, awaiting commands")
+            }
         }
         return START_STICKY
+    }
+
+    /**
+     * Immediately promotes this service to foreground with a valid Notification.
+     * MUST be called within 5 seconds of startForegroundService() to avoid
+     * ForegroundServiceDidNotStartInTimeException.
+     */
+    private fun promoteToForeground(intent: Intent?) {
+        createNotificationChannel()
+        val notifTitle = intent?.getStringExtra(EXTRA_NOTIFICATION_TITLE)
+            ?: "Glance đang hoạt động"
+        val notifText = intent?.getStringExtra(EXTRA_NOTIFICATION_TEXT)
+            ?: "Chế độ Tiêu chuẩn đang bảo vệ màn hình"
+        val notification = buildForegroundNotification(notifTitle, notifText)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIF_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIF_ID, notification)
+        }
+        Log.d(TAG, "promoteToForeground — notification posted")
+    }
+
+    /**
+     * Builds a minimal foreground notification for the Standard service.
+     */
+    private fun buildForegroundNotification(title: String, text: String): Notification {
+        return Notification.Builder(this, NOTIF_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+            .setOngoing(true)
+            .build()
+    }
+
+    /**
+     * Initializes WindowManager, SensorManager, PowerManager, and rotation sensor.
+     * Safe to call multiple times — each field is only set if still null.
+     */
+    private fun initSystemServices() {
+        if (windowManager == null) {
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        }
+        if (sensorManager == null) {
+            sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        }
+        if (powerManager == null) {
+            powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        }
+        if (rotationSensor == null) {
+            rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+                ?: sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        }
+    }
+
+    /**
+     * Registers the BroadcastReceiver for runtime config changes.
+     * Safe to call multiple times — only registers once.
+     */
+    private fun registerConfigReceiver() {
+        if (receiverRegistered) return
+        try {
+            val filter = IntentFilter().apply {
+                addAction(ACTION_UPDATE_CONFIG)
+                addAction(ACTION_STOP_SERVICE)
+                addAction(ACTION_RESUME_SERVICE)
+                addAction(ACTION_CALIBRATE)
+                addAction(ACTION_SET_SENSITIVITY)
+                addAction(ACTION_SET_OVERLAY_MODE)
+                addAction(ACTION_SET_TARGETED_AREA)
+                addAction(ACTION_SET_TOLERANCE)
+                addAction(ACTION_START_SENSOR_ONLY)
+            }
+            registerReceiver(configReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            receiverRegistered = true
+        } catch (_: Exception) {
+            // Already registered — ignore
+        }
     }
 
     override fun onDestroy() {

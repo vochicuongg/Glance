@@ -1,35 +1,29 @@
-Bạn là một Senior Flutter/Android Architect. Hãy tự phân tích cấu trúc mã nguồn hiện tại và triển khai chính xác các bước logic sau:
-
-BƯỚC 1: ĐIỀU CHỈNH ĐỘ ĐẬM CHẾ ĐỘ TIÊU CHUẨN (NATIVE KOTLIN)
+BƯỚC 1: XÂY DỰNG FOREGROUND NOTIFICATION CHO STANDARD SERVICE
 
 Mở file StandardOverlayService.kt.
 
-Tìm vị trí định nghĩa giá trị Alpha trần (MAX_ALPHA, hiện tại đang là 204).
+Viết thêm 2 hàm helper nội bộ: một hàm để tạo NotificationChannel (Yêu cầu API 26+, Name: "Glance Protection", Importance: LOW để không kêu ting ting), và một hàm để tạo Notification cơ bản (Dùng icon của app, Title: "Glance đang hoạt động", Text: "Chế độ Tiêu chuẩn đang bảo vệ màn hình").
 
-Điều chỉnh tăng thông số này lên mức 212 (tương đương tăng thêm khoảng 3-4% độ đậm). Điều này giúp lớp phủ Tiêu chuẩn che chắn thông tin tài chính tốt hơn khi nghiêng máy, trong khi vẫn giữ nguyên toàn bộ thuật toán cảm biến tốc độ cao và cấu trúc Foreground Service hiện tại.
+Trong hàm onCreate() hoặc onStartCommand() của Service này, BẮT BUỘC phải gọi hàm startForeground(NOTIFICATION_ID, notification) ngay lập tức. (Lưu ý: Nếu Android 14+ yêu cầu, hãy đảm bảo type là FOREGROUND_SERVICE_TYPE_SPECIAL_USE như đã khai báo trong Manifest).
 
-BƯỚC 2: RẼ NHÁNH HIỂN THỊ CHẾ ĐỘ TRÊN GIAO DIỆN (FLUTTER UI)
+Trong BroadcastReceiver (chỗ bắt ACTION_STOP_SERVICE), thay vì chỉ ẩn rèm như cũ, đối với Service thường này hãy gọi thêm stopForeground(STOP_FOREGROUND_REMOVE) (nếu có hỗ trợ) và gọi stopSelf() để tắt hoàn toàn Service, dọn dẹp sạch sẽ Notification.
 
-Mở file chứa giao diện chính hoặc widget hiển thị trạng thái bảo vệ (ví dụ: dashboard_screen.dart hoặc shield_status_card.dart).
-
-Tìm khu vực render chuỗi ký tự trạng thái kích hoạt (chỗ hiển thị các text localized như "Chưa kích hoạt" hoặc "Đang bảo vệ").
-
-Viết thêm logic đọc biến trạng thái chế độ đang chọn (được lấy lên từ SharedPreferences với key là chế độ bảo mật).
-
-Thêm một thành phần văn bản nhỏ (Text Widget) nằm ngay phía dưới dòng trạng thái chính. Nếu hệ thống đang bật, hiển thị tên chế độ tương ứng bằng tiếng Việt/tiếng Anh tương ứng với cấu hình đã lưu (Ví dụ: "Chế độ: Tiêu chuẩn" hoặc "Chế độ: Tối đa"). Nếu hệ thống tắt, vẫn hiển thị tên chế độ đã thiết lập sẵn dưới dạng text mờ để người dùng nắm thông tin.
-
-BƯỚC 3: ĐỒNG BỘ PHỤ ĐỀ CHO QUICK SETTINGS TILE (NATIVE KOTLIN)
+BƯỚC 2: RÀ SOÁT LẠI LUỒNG TILE TOGGLE (GLANCE TILE SERVICE)
 
 Mở file GlanceTileService.kt.
 
-Trong hàm xử lý việc cập nhật trạng thái hiển thị của Tile (thường là hàm updateTile), hãy viết thêm logic kết nối dữ liệu ngầm.
+Kiểm tra lại logic hàm onClick() khi người dùng nhấn vào Tile:
 
-Khởi tạo và đọc cấu hình chế độ bảo mật từ file lưu trữ cấu hình chung của ứng dụng ở tầng Native (SharedPreferences của Android).
+Đọc biến Mode từ SharedPreferences.
 
-Sử dụng thuộc tính phụ đề hệ thống của đối tượng Tile (thuộc tính tile.subtitle, có sẵn từ Android 10 / API 29 trở lên).
+Nếu là Chế độ Tiêu chuẩn (Standard):
 
-Thực hiện rẽ nhánh điều kiện: Nếu cấu hình đọc được là chế độ tiêu chuẩn, gán tile.subtitle bằng chuỗi ký tự tương ứng (ví dụ: "Tiêu chuẩn"). Nếu là chế độ tối đa, gán thành "Tối đa".
+Trạng thái đang TẮT -> Nhấn để BẬT: Phải gọi ContextCompat.startForegroundService(...) trỏ tới StandardOverlayService. (Không dùng startService thường).
 
-Đảm bảo lệnh gán phụ đề này được chạy đồng thời khi Tile thay đổi trạng thái (Active/Inactive) và đừng quên gọi lệnh cập nhật Tile của hệ thống để đồng bộ giao diện rèm lên thanh trạng thái.
+Trạng thái đang BẬT -> Nhấn để TẮT: Phải gửi lệnh/Broadcast dừng (ACTION_STOP_SERVICE) để Service tự stopSelf().
 
-Hãy tự động dò tìm các file liên quan, thực hiện ghi đè chính xác các tham số hiển thị và thông báo tóm tắt ngắn gọn sau khi hoàn thành.
+Nếu là Chế độ Tối đa (Max - Accessibility): Luồng hibernate/resume bằng Broadcast giữ nguyên như cũ, không đụng tới vì OS tự quản lý sinh mệnh của nó.
+
+Đảm bảo giao diện của Tile (Active/Inactive) và Subtitle ("Tiêu chuẩn"/"Tối đa") được cập nhật chính xác ngay sau khi nhấn.
+
+Hãy tự động dò tìm cấu trúc file hiện tại, sử dụng công cụ để ghi đè mã nguồn Kotlin thật sạch sẽ, handle triệt để các rule của Android O+, và báo cáo kết quả ngắn gọn.

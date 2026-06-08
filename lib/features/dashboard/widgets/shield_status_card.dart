@@ -69,6 +69,8 @@ class ShieldStatusCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
+          _ModeLabel(isActive: isActive, protectionMode: protectionMode),
+          const SizedBox(height: 10),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: Text(
@@ -82,8 +84,6 @@ class ShieldStatusCard extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(height: 10),
-          _ModeLabel(isActive: isActive, protectionMode: protectionMode),
           const SizedBox(height: 28),
           _ServiceToggle(isActive: isActive, onToggle: onToggle),
         ],
@@ -103,8 +103,8 @@ class _ModeLabel extends StatelessWidget {
     final locale = LocaleProvider.of(context).locale;
     final isStandard = protectionMode == 'standard';
     final label = locale == AppLocale.vi
-        ? 'Chế độ: ${isStandard ? 'Tiêu chuẩn' : 'Tối đa'}'
-        : 'Mode: ${isStandard ? 'Standard' : 'Maximum'}';
+        ? (isStandard ? 'Tiêu chuẩn' : 'Tối đa')
+        : (isStandard ? 'Standard' : 'Maximum');
 
     return AnimatedDefaultTextStyle(
       duration: const Duration(milliseconds: 250),

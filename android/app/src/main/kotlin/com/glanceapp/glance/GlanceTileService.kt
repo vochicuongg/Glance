@@ -89,7 +89,7 @@ class GlanceTileService : TileService() {
 
     private fun handleStandardModeTile(tile: Tile) {
         if (StandardOverlayService.isRunning) {
-            // ── STOP: Send broadcast + stop foreground service ─────────────
+            // ── STOP: Send broadcast so the service can stopForeground + stopSelf ──
             tile.state = Tile.STATE_INACTIVE
             tile.updateTile()
             Log.d(TAG, "Standard — Tile UI → INACTIVE")
@@ -97,10 +97,9 @@ class GlanceTileService : TileService() {
             sendBroadcast(Intent(StandardOverlayService.ACTION_STOP_SERVICE).apply {
                 setPackage(packageName)
             })
-            stopService(Intent(this, StandardOverlayService::class.java))
-            Log.d(TAG, "Standard — stop broadcast + stopService sent")
+            Log.d(TAG, "Standard — stop broadcast sent via Tile")
         } else {
-            // ── START: Check overlay permission, then start service ────────
+            // ── START: Check overlay permission, then start foreground service ─────
             if (!Settings.canDrawOverlays(this)) {
                 Log.w(TAG, "Standard — overlay permission missing, opening settings")
                 tile.state = Tile.STATE_INACTIVE
@@ -120,12 +119,14 @@ class GlanceTileService : TileService() {
             tile.updateTile()
             Log.d(TAG, "Standard — Tile UI → ACTIVE")
 
-            // Start as foreground service with RESUME action
+            // Start as foreground service with START_STANDARD_MODE action.
+            // This action is handled in onStartCommand() which ALWAYS calls
+            // startForeground() first, preventing ForegroundServiceDidNotStartInTimeException.
             val serviceIntent = Intent(this, StandardOverlayService::class.java).apply {
-                action = StandardOverlayService.ACTION_RESUME_SERVICE
+                action = StandardOverlayService.ACTION_START_STANDARD_MODE
             }
             ContextCompat.startForegroundService(this, serviceIntent)
-            Log.d(TAG, "Standard — startForegroundService + RESUME sent via Tile")
+            Log.d(TAG, "Standard — startForegroundService(ACTION_START_STANDARD_MODE) sent via Tile")
         }
     }
 

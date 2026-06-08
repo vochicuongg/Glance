@@ -143,7 +143,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                             ),
                             _FeatureItem(
                               icon: Icons.info_outline_rounded,
-                              text: 'Lưu ý: Giới hạn thao tác cảm ứng tại vùng bị che phủ khi lớp phủ xuất hiện.',
+                              text: 'Lưu ý: Lớp phủ vừa phải, có thể nhìn thấy nội dung ở mức tương đối.',
                               isPositive: false,
                             ),
                           ],
