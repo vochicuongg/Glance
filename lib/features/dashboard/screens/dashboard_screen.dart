@@ -48,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   double _sensitivity = 0.5; // Default: Medium
   double _tolerance = 5.0; // Default: 5° hysteresis dead zone
   bool _isTargetedMode = false; // false = fullscreen, true = targeted
+  String _protectionMode = 'maximum';
 
   // ── Service ─────────────────────────────────────────────────────────────
   final _channelService = GlanceChannelService();
@@ -69,10 +70,12 @@ class _DashboardScreenState extends State<DashboardScreen>
   /// sliders to reset to hardcoded defaults.
   Future<void> _loadSavedSettings() async {
     final settings = await GlanceChannelService.getSettingsFromNative();
+    final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
         _tolerance = settings['tolerance'] ?? 5.0;
         _sensitivity = settings['sensitivity'] ?? 0.5;
+        _protectionMode = prefs.getString('protection_mode') ?? 'maximum';
         // Only sync isCalibrated from Native if Service IS RUNNING
         if (_isServiceActive) {
           _isCalibrated = settings['isCalibrated'] ?? false;
@@ -524,6 +527,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   // 1. Shield Status Card (hero)
                   ShieldStatusCard(
                     isActive: _isServiceActive,
+                    protectionMode: _protectionMode,
                     onToggle: _handleToggleService,
                   ),
 

@@ -95,7 +95,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
         // ── Max Alpha for Maximum mode ────────────────────────────────────
         // 230 = ~90% opacity on AMOLED. Allows faint content visibility
         // beneath the shield while remaining highly effective.
-        private const val MAX_ALPHA = 230
+        private const val MAX_ALPHA = 216
 
         /**
          * Checks whether this AccessibilityService is currently enabled
@@ -179,7 +179,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                         rotationSensor?.let {
                             sensorManager?.registerListener(
                                 this@MaxOverlayService, it,
-                                SensorManager.SENSOR_DELAY_FASTEST
+                                SensorManager.SENSOR_DELAY_GAME
                             )
                         }
                         wakeLock?.let { if (it.isHeld) it.release() }
@@ -210,7 +210,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                         rotationSensor?.let {
                             sensorManager?.registerListener(
                                 this@MaxOverlayService, it,
-                                SensorManager.SENSOR_DELAY_FASTEST
+                                SensorManager.SENSOR_DELAY_GAME
                             )
                         }
                         wakeLock?.let { if (it.isHeld) it.release() }
@@ -236,7 +236,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                         rotationSensor?.let {
                             sensorManager?.registerListener(
                                 this@MaxOverlayService, it,
-                                SensorManager.SENSOR_DELAY_FASTEST
+                                SensorManager.SENSOR_DELAY_GAME
                             )
                         }
                         wakeLock?.let { if (it.isHeld) it.release() }
@@ -373,7 +373,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
 
         // ── 4. Compute Target Alpha from tilt deviation ───────────────────
         val toleranceThreshold = 15f + (sensorTolerance * 30f)
-        val maxAngleRange = 40f
+        val maxAngleRange = 25f
 
         val targetAlpha: Float = if (absRoll > toleranceThreshold) {
             val deviation = absRoll - toleranceThreshold
@@ -383,8 +383,8 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
             0f
         }
 
-        // ── 5. EMA smoothing on alpha value (coefficient 0.04) ────────────
-        currentDisplayedAlpha += 0.04f * (targetAlpha - currentDisplayedAlpha)
+        // ── 5. EMA smoothing on alpha value (coefficient 0.8) ────────────
+        currentDisplayedAlpha += 0.8f * (targetAlpha - currentDisplayedAlpha)
 
         // ── 6. UI decision: show/hide overlay based on smoothed alpha ─────
         if (currentDisplayedAlpha > 1f) {

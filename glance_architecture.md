@@ -1,22 +1,35 @@
-BƯỚC 1: DỌN DẸP VÀ THIẾT LẬP BIẾN TOÀN CỤC MỚI
+Bạn là một Senior Flutter/Android Architect. Hãy tự phân tích cấu trúc mã nguồn hiện tại và triển khai chính xác các bước logic sau:
 
-Trong cả 2 file Service, hãy tìm và xóa bỏ hoàn toàn các biến làm mượt góc nghiêng cũ (ví dụ: smoothedPitch, smoothedRoll, smoothedDeviation).
+BƯỚC 1: ĐIỀU CHỈNH ĐỘ ĐẬM CHẾ ĐỘ TIÊU CHUẨN (NATIVE KOTLIN)
 
-Khai báo một biến toàn cục mới (kiểu Float, khởi tạo bằng 0) để quản lý trực tiếp "Giá trị Alpha đang hiển thị trên màn hình" (Current Displayed Alpha).
+Mở file StandardOverlayService.kt.
 
-BƯỚC 2: TÁI CẤU TRÚC THUẬT TOÁN TẠI HÀM LẮNG NGHE CẢM BIẾN (onSensorChanged)
-Viết lại luồng logic xử lý dữ liệu cảm biến cho cả 2 class theo các bước toán học sau:
+Tìm vị trí định nghĩa giá trị Alpha trần (MAX_ALPHA, hiện tại đang là 204).
 
-Tính Alpha Mục Tiêu (Target Alpha): Kiểm tra góc nghiêng. Nếu vượt qua ngưỡng an toàn (tolerance), hãy tính tỷ lệ phần trăm vượt ngưỡng (từ 0.0 đến 1.0). Lấy tỷ lệ này nhân với Giới hạn Alpha tối đa (230 đối với Max, 204 đối với Standard) để ra được Alpha Mục Tiêu. Nếu chưa vượt ngưỡng, Alpha Mục Tiêu bằng 0.
+Điều chỉnh tăng thông số này lên mức 212 (tương đương tăng thêm khoảng 3-4% độ đậm). Điều này giúp lớp phủ Tiêu chuẩn che chắn thông tin tài chính tốt hơn khi nghiêng máy, trong khi vẫn giữ nguyên toàn bộ thuật toán cảm biến tốc độ cao và cấu trúc Foreground Service hiện tại.
 
-Áp dụng Bộ lọc EMA: Cập nhật biến "Alpha đang hiển thị" bằng công thức: Alpha đang hiển thị += 0.04 * (Target Alpha - Alpha đang hiển thị). Hệ số 0.04 sẽ giúp rèm chuyển màu cực kỳ mượt.
+BƯỚC 2: RẼ NHÁNH HIỂN THỊ CHẾ ĐỘ TRÊN GIAO DIỆN (FLUTTER UI)
 
-Quyết định UI: Kiểm tra biến "Alpha đang hiển thị". Nếu lớn hơn 1f, tiến hành bơm View rèm (nếu chưa có) và gọi hàm áp dụng màu rèm. Nếu nhỏ hơn hoặc bằng 1f, ẩn View rèm đi.
+Mở file chứa giao diện chính hoặc widget hiển thị trạng thái bảo vệ (ví dụ: dashboard_screen.dart hoặc shield_status_card.dart).
 
-BƯỚC 3: CẬP NHẬT HÀM ÁP DỤNG MÀU (applyAlphaToOverlay)
+Tìm khu vực render chuỗi ký tự trạng thái kích hoạt (chỗ hiển thị các text localized như "Chưa kích hoạt" hoặc "Đang bảo vệ").
 
-Sửa lại tham số đầu vào của hàm này: Không nhận tỷ lệ phần trăm nữa, mà nhận trực tiếp giá trị Alpha (kiểu Int) đã được tính toán bằng EMA từ hàm trên.
+Viết thêm logic đọc biến trạng thái chế độ đang chọn (được lấy lên từ SharedPreferences với key là chế độ bảo mật).
 
-Trong hàm, phải có bước chốt chặn an toàn (coerceIn) để đảm bảo giá trị Alpha này không bao giờ vượt qua mức trần (230 cho MaxMode, 204 cho StandardMode). Sau đó dùng giá trị này tạo màu đen và set cho Background của View.
+Thêm một thành phần văn bản nhỏ (Text Widget) nằm ngay phía dưới dòng trạng thái chính. Nếu hệ thống đang bật, hiển thị tên chế độ tương ứng bằng tiếng Việt/tiếng Anh tương ứng với cấu hình đã lưu (Ví dụ: "Chế độ: Tiêu chuẩn" hoặc "Chế độ: Tối đa"). Nếu hệ thống tắt, vẫn hiển thị tên chế độ đã thiết lập sẵn dưới dạng text mờ để người dùng nắm thông tin.
 
-Hãy suy nghĩ cẩn thận, thiết kế code Kotlin thật sạch sẽ và tối ưu hiệu năng. Hoàn tất ghi đè thì báo cáo kết quả ngắn gọn.
+BƯỚC 3: ĐỒNG BỘ PHỤ ĐỀ CHO QUICK SETTINGS TILE (NATIVE KOTLIN)
+
+Mở file GlanceTileService.kt.
+
+Trong hàm xử lý việc cập nhật trạng thái hiển thị của Tile (thường là hàm updateTile), hãy viết thêm logic kết nối dữ liệu ngầm.
+
+Khởi tạo và đọc cấu hình chế độ bảo mật từ file lưu trữ cấu hình chung của ứng dụng ở tầng Native (SharedPreferences của Android).
+
+Sử dụng thuộc tính phụ đề hệ thống của đối tượng Tile (thuộc tính tile.subtitle, có sẵn từ Android 10 / API 29 trở lên).
+
+Thực hiện rẽ nhánh điều kiện: Nếu cấu hình đọc được là chế độ tiêu chuẩn, gán tile.subtitle bằng chuỗi ký tự tương ứng (ví dụ: "Tiêu chuẩn"). Nếu là chế độ tối đa, gán thành "Tối đa".
+
+Đảm bảo lệnh gán phụ đề này được chạy đồng thời khi Tile thay đổi trạng thái (Active/Inactive) và đừng quên gọi lệnh cập nhật Tile của hệ thống để đồng bộ giao diện rèm lên thanh trạng thái.
+
+Hãy tự động dò tìm các file liên quan, thực hiện ghi đè chính xác các tham số hiển thị và thông báo tóm tắt ngắn gọn sau khi hoàn thành.

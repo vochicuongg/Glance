@@ -2,6 +2,7 @@ package com.glanceapp.glance
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -176,6 +177,10 @@ class GlanceTileService : TileService() {
     private fun updateTileState() {
         val tile = qsTile ?: return
 
+        // ── Read current protection mode for subtitle ─────────────────────
+        val mode = getProtectionMode()
+        val modeSubtitle = if (mode == "standard") "Tiêu chuẩn" else "Tối đa"
+
         if (isAnyServiceRunning()) {
             tile.state = Tile.STATE_ACTIVE
             tile.label = "Glance"
@@ -186,7 +191,12 @@ class GlanceTileService : TileService() {
             tile.contentDescription = "Glance privacy shield is inactive"
         }
 
+        // ── Set subtitle (available from Android 10 / API 29+) ────────────
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            tile.subtitle = modeSubtitle
+        }
+
         tile.updateTile()
-        Log.d(TAG, "Tile updated: state=${if (tile.state == Tile.STATE_ACTIVE) "ACTIVE" else "INACTIVE"}")
+        Log.d(TAG, "Tile updated: state=${if (tile.state == Tile.STATE_ACTIVE) "ACTIVE" else "INACTIVE"}, subtitle=$modeSubtitle")
     }
 }

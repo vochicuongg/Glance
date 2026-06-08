@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -12,11 +13,13 @@ import '../../../core/theme/app_colors.dart';
 /// ─────────────────────────────────────────────────────────────────────────────
 class ShieldStatusCard extends StatelessWidget {
   final bool isActive;
+  final String protectionMode;
   final ValueChanged<bool> onToggle;
 
   const ShieldStatusCard({
     super.key,
     required this.isActive,
+    required this.protectionMode,
     required this.onToggle,
   });
 
@@ -79,10 +82,45 @@ class ShieldStatusCard extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ),
+          const SizedBox(height: 10),
+          _ModeLabel(isActive: isActive, protectionMode: protectionMode),
           const SizedBox(height: 28),
           _ServiceToggle(isActive: isActive, onToggle: onToggle),
         ],
       ),
+    );
+  }
+}
+
+class _ModeLabel extends StatelessWidget {
+  final bool isActive;
+  final String protectionMode;
+
+  const _ModeLabel({required this.isActive, required this.protectionMode});
+
+  @override
+  Widget build(BuildContext context) {
+    final locale = LocaleProvider.of(context).locale;
+    final isStandard = protectionMode == 'standard';
+    final label = locale == AppLocale.vi
+        ? 'Chế độ: ${isStandard ? 'Tiêu chuẩn' : 'Tối đa'}'
+        : 'Mode: ${isStandard ? 'Standard' : 'Maximum'}';
+
+    return AnimatedDefaultTextStyle(
+      duration: const Duration(milliseconds: 250),
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: (isActive
+                    ? AppColors.accent(context)
+                    : AppColors.textTertiaryC(context))
+                .withValues(alpha: isActive ? 0.95 : 0.65),
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ) ??
+          TextStyle(
+            color: AppColors.textTertiaryC(context),
+            fontWeight: FontWeight.w600,
+          ),
+      child: Text(label),
     );
   }
 }

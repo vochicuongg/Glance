@@ -35,7 +35,7 @@ import android.view.WindowManager
  * │  DUAL-ENGINE ARCHITECTURE — STANDARD ENGINE                         │
  * │                                                                    │
  * │  • Uses TYPE_APPLICATION_OVERLAY (untrusted window)                 │
- * │  • Alpha capped at 204 (80%) — safe threshold for Untrusted Touch   │
+ * │  • Alpha capped at 212 (~83%) — below Maximum mode intensity        │
  * │  • Requires ONLY Overlay permission (no Accessibility)              │
  * │  • Banking apps work normally                                       │
  * │  • Runs as foreground service with notification                     │
@@ -92,9 +92,9 @@ class StandardOverlayService : Service(), SensorEventListener {
         private const val NOTIF_ID = 9001
 
         // ── Max Alpha for Standard mode ───────────────────────────────────
-        // 204 = 80% opacity. Safe threshold that doesn't trigger Android's
-        // Untrusted Touch Blocker. Banking apps work normally.
-        private const val MAX_ALPHA = 204
+        // 212 ~= 83% opacity, stronger than before while staying below
+        // Maximum mode's 216 cap.
+        private const val MAX_ALPHA = 212
     }
 
     // ── System services ───────────────────────────────────────────────────
@@ -157,7 +157,7 @@ class StandardOverlayService : Service(), SensorEventListener {
                         rotationSensor?.let {
                             sensorManager?.registerListener(
                                 this@StandardOverlayService, it,
-                                SensorManager.SENSOR_DELAY_FASTEST
+                                SensorManager.SENSOR_DELAY_GAME
                             )
                         }
                         wakeLock?.let { if (it.isHeld) it.release() }
@@ -193,7 +193,7 @@ class StandardOverlayService : Service(), SensorEventListener {
                         rotationSensor?.let {
                             sensorManager?.registerListener(
                                 this@StandardOverlayService, it,
-                                SensorManager.SENSOR_DELAY_FASTEST
+                                SensorManager.SENSOR_DELAY_GAME
                             )
                         }
                         wakeLock?.let { if (it.isHeld) it.release() }
@@ -219,7 +219,7 @@ class StandardOverlayService : Service(), SensorEventListener {
                         rotationSensor?.let {
                             sensorManager?.registerListener(
                                 this@StandardOverlayService, it,
-                                SensorManager.SENSOR_DELAY_FASTEST
+                                SensorManager.SENSOR_DELAY_GAME
                             )
                         }
                         wakeLock?.let { if (it.isHeld) it.release() }
@@ -311,7 +311,7 @@ class StandardOverlayService : Service(), SensorEventListener {
 
             rotationSensor?.let {
                 sensorManager?.registerListener(
-                    this, it, SensorManager.SENSOR_DELAY_FASTEST
+                    this, it, SensorManager.SENSOR_DELAY_GAME
                 )
             }
 
@@ -394,7 +394,7 @@ class StandardOverlayService : Service(), SensorEventListener {
 
         // ── 4. Compute Target Alpha from tilt deviation ───────────────────
         val toleranceThreshold = 15f + (sensorTolerance * 30f)
-        val maxAngleRange = 40f
+        val maxAngleRange = 25f
 
         val targetAlpha: Float = if (absRoll > toleranceThreshold) {
             val deviation = absRoll - toleranceThreshold
@@ -404,8 +404,8 @@ class StandardOverlayService : Service(), SensorEventListener {
             0f
         }
 
-        // ── 5. EMA smoothing on alpha value (coefficient 0.04) ────────────
-        currentDisplayedAlpha += 0.04f * (targetAlpha - currentDisplayedAlpha)
+        // ── 5. EMA smoothing on alpha value (coefficient 0.8) ────────────
+        currentDisplayedAlpha += 0.8f * (targetAlpha - currentDisplayedAlpha)
 
         // ── 6. UI decision: show/hide overlay based on smoothed alpha ─────
         if (currentDisplayedAlpha > 1f) {
