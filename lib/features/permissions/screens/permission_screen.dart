@@ -352,18 +352,11 @@ class _PermissionStepView extends StatelessWidget {
           const Spacer(flex: 2),
 
           // ── App Icon / Branding ──────────────────────────────────────────
-          Container(
+          Image.asset(
+            'assets/glance-favicon.png',
             width: 96,
             height: 96,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: colorScheme.primaryContainer,
-            ),
-            child: Icon(
-              Icons.shield_rounded,
-              size: 48,
-              color: colorScheme.primary,
-            ),
+            fit: BoxFit.contain,
           ),
           const SizedBox(height: 16),
           Text(
@@ -381,14 +374,11 @@ class _PermissionStepView extends StatelessWidget {
           const SizedBox(height: 32),
 
           // ── Permission Icon ─────────────────────────────────────────────
-          Container(
+          Image.asset(
+            'assets/glance-favicon.png',
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: colorScheme.secondaryContainer,
-            ),
-            child: Icon(icon, size: 40, color: colorScheme.secondary),
+            fit: BoxFit.contain,
           ),
           const SizedBox(height: 24),
 

@@ -527,18 +527,11 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ),
         // ── Icon ──────────────────────────────────────────────────────
-        icon: Container(
+        icon: Image.asset(
+          'assets/glance-favicon.png',
           width: 56,
           height: 56,
-          decoration: BoxDecoration(
-            color: AppColors.gold.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.shield_outlined,
-            color: AppColors.gold,
-            size: 28,
-          ),
+          fit: BoxFit.contain,
         ),
         // ── Title ─────────────────────────────────────────────────────
         title: Text(
@@ -641,13 +634,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                       color: AppColors.gold.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(
-                      Icons.visibility_off_rounded,
-                      size: 15,
-                      color: AppColors.gold,
+                    child: Image.asset(
+                      'assets/glance-logo.png',
+                      width: 32,
+                      height: 32,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Text(
                     'GLANCE',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(

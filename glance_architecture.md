@@ -1,25 +1,15 @@
-BƯỚC 1: BỔ SUNG TỪ KHÓA RÚT GỌN VÀO app_strings.dart
+BƯỚC 1: CẬP NHẬT PUBSPEC.YAML
 
-Mở file lib/core/localization/app_strings.dart.
+Mở pubspec.yaml và thêm đường dẫn asset mới vào ngay dưới mục assets: để Flutter có quyền truy cập ảnh:
 
-Khai báo thêm 2 biến String mới: standardModeShort và maximumModeShort.
+YAML
+    - assets/glance-favicon.png
+BƯỚC 2: THAY THẾ HÌNH TRÒN MÀU VÀNG TRÊN CÁC GIAO DIỆN YÊU CẦU
 
-Đưa 2 biến này vào constructor.
+Rà soát các file UI liên quan đến màn hình chính, thẻ trạng thái hoặc màn hình xin quyền thông báo (rà soát trong lib/features/dashboard/widgets/shield_status_card.dart, lib/features/permissions/screens/permission_screen.dart hoặc các widget hiển thị vòng tròn cảnh báo tương tự).
 
-Trong bản tiếng Anh (hàm trả về tiếng Anh), gán giá trị: 'Standard' và 'Maximum'.
+Tìm cấu trúc mã nguồn đang vẽ một hình tròn màu vàng làm placeholder (thường dùng Container với BoxShape.circle và Colors.amber / Colors.yellow, hoặc một Icon cảnh báo màu vàng).
 
-Trong bản tiếng Việt (hàm trả về tiếng Việt), gán giá trị: 'Tiêu chuẩn' và 'Tối đa'.
+Thay thế hình tròn/icon đó bằng cách hiển thị favicon trực tiếp từ tài nguyên: Image.asset('assets/glance-favicon.png', width: 32, height: 32) (điều chỉnh width/height cho cân đối, vừa vặn với kích thước của khối cũ).
 
-(Tuyệt đối không xóa hay sửa các biến standardMode và maximumMode cũ).
-
-BƯỚC 2: CẬP NHẬT GIAO DIỆN CÀI ĐẶT
-
-Rà soát file chứa danh sách chọn chế độ trong Cài đặt (ví dụ: lib/features/dashboard/widgets/overlay_mode_card.dart hoặc lib/features/dashboard/screens/settings_screen.dart).
-
-Tại Widget hiển thị text của các tùy chọn Radio/Button chọn chế độ, hãy thay thế việc gọi AppStrings...standardMode thành AppStrings...standardModeShort (và tương tự cho Maximum).
-
-BƯỚC 3: KIỂM TRA CHÉO DASHBOARD
-
-Kiểm tra nhanh file lib/features/dashboard/widgets/shield_status_card.dart và dashboard_screen.dart để đảm bảo chúng VẪN ĐANG GỌI các biến đầy đủ (standardMode và maximumMode). Không thay đổi gì ở đây.
-
-Hãy tuần tự sử dụng tool đọc file, phân tích cú pháp và dùng tool replace để ghi đè chính xác. Xong việc thì báo cáo tóm tắt là xong!
+Hãy tuần tự sử dụng tool đọc file, phân tích cú pháp và dùng tool replace để ghi đè chính xác, giữ nguyên các logic xử lý sự kiện xung quanh.

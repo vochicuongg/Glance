@@ -124,7 +124,7 @@ class _ModeLabel extends StatelessWidget {
   }
 }
 
-/// Animated shield icon that scales and changes color based on active state.
+/// Animated favicon mark that scales and changes frame color based on active state.
 class _AnimatedShieldIcon extends StatelessWidget {
   final bool isActive;
 
@@ -152,13 +152,12 @@ class _AnimatedShieldIcon extends StatelessWidget {
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
         switchInCurve: Curves.easeOutBack,
-        child: Icon(
-          isActive ? Icons.shield_rounded : Icons.shield_outlined,
+        child: Image.asset(
+          'assets/glance-favicon.png',
           key: ValueKey('shield_$isActive'),
-          size: 40,
-          color: isActive
-              ? AppColors.accent(context)
-              : AppColors.textTertiaryC(context),
+          width: 48,
+          height: 48,
+          fit: BoxFit.contain,
         ),
       ),
     );

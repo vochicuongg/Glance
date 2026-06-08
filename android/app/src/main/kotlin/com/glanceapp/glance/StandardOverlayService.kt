@@ -335,7 +335,7 @@ class StandardOverlayService : Service(), SensorEventListener {
         return Notification.Builder(this, NOTIF_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+            .setSmallIcon(R.drawable.ic_favicon)
             .setOngoing(true)
             .build()
     }
