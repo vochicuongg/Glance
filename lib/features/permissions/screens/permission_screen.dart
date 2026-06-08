@@ -138,9 +138,7 @@ class _PermissionScreenState extends State<PermissionScreen>
     } else {
       // Onboarding flow → replace with Dashboard
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const DashboardScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );
     }
   }
@@ -202,6 +200,7 @@ class _PermissionScreenState extends State<PermissionScreen>
           colorScheme: colorScheme,
           theme: theme,
           strings: strings,
+          showRestrictedSettingsHelp: true,
         );
       } else {
         // Step 2: Overlay
@@ -232,66 +231,67 @@ class _PermissionScreenState extends State<PermissionScreen>
           Navigator.of(context).pop();
         } else {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => const ModeSelectionScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const ModeSelectionScreen()),
           );
         }
       },
       child: Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
         backgroundColor: colorScheme.surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () {
-            if (widget.fromSettings) {
-              // Coming from Settings → just pop back
-              Navigator.of(context).pop();
-            } else {
-              // Onboarding flow → go to ModeSelectionScreen
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => const ModeSelectionScreen(),
+        appBar: AppBar(
+          backgroundColor: colorScheme.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            onPressed: () {
+              if (widget.fromSettings) {
+                // Coming from Settings → just pop back
+                Navigator.of(context).pop();
+              } else {
+                // Onboarding flow → go to ModeSelectionScreen
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => const ModeSelectionScreen(),
+                  ),
+                );
+              }
+            },
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: colorScheme.onSurfaceVariant,
+              size: 20,
+            ),
+            tooltip: widget.fromSettings
+                ? 'Quay lại cài đặt'
+                : 'Quay lại chọn chế độ',
+          ),
+        ),
+        body: SafeArea(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 450),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              // Combine fade + subtle slide-up for a polished transition
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position:
+                      Tween<Offset>(
+                        begin: const Offset(0.0, 0.08),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                  child: child,
                 ),
               );
-            }
-          },
-          icon: Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: colorScheme.onSurfaceVariant,
-            size: 20,
+            },
+            child: stepContent,
           ),
-          tooltip: widget.fromSettings
-              ? 'Quay lại cài đặt'
-              : 'Quay lại chọn chế độ',
         ),
-      ),
-      body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 450),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            // Combine fade + subtle slide-up for a polished transition
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.0, 0.08),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                )),
-                child: child,
-              ),
-            );
-          },
-          child: stepContent,
-        ),
-      ),
       ),
     );
   }
@@ -324,6 +324,7 @@ class _PermissionStepView extends StatelessWidget {
   final ColorScheme colorScheme;
   final ThemeData theme;
   final LocalizedStrings strings;
+  final bool showRestrictedSettingsHelp;
 
   const _PermissionStepView({
     super.key,
@@ -339,6 +340,7 @@ class _PermissionStepView extends StatelessWidget {
     required this.colorScheme,
     required this.theme,
     required this.strings,
+    this.showRestrictedSettingsHelp = false,
   });
 
   @override
@@ -386,11 +388,7 @@ class _PermissionStepView extends StatelessWidget {
               shape: BoxShape.circle,
               color: colorScheme.secondaryContainer,
             ),
-            child: Icon(
-              icon,
-              size: 40,
-              color: colorScheme.secondary,
-            ),
+            child: Icon(icon, size: 40, color: colorScheme.secondary),
           ),
           const SizedBox(height: 24),
 
@@ -438,6 +436,34 @@ class _PermissionStepView extends StatelessWidget {
               ),
             ),
           ),
+
+          if (showRestrictedSettingsHelp) ...[
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: GlanceChannelService.openAppDetails,
+              icon: const Icon(Icons.admin_panel_settings_rounded, size: 18),
+              label: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(strings.restrictedSettingsHint),
+                  const SizedBox(height: 2),
+                  Text(
+                    strings.restrictedSettingsInstruction,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: colorScheme.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 12),
 

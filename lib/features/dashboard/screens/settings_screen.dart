@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/glance_channel_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -32,6 +33,9 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _protectionMode = 'maximum';
   bool _isLoading = true;
+
+  String _modeLabel(LocalizedStrings strings, String mode) =>
+      mode == 'standard' ? strings.standardMode : strings.maximumMode;
 
   @override
   void initState() {
@@ -73,9 +77,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (!hasOverlay) {
         // Missing overlay → navigate to PermissionScreen to request it
-        await Navigator.of(context).push(
+        if (!mounted) return;
+        final navigator = Navigator.of(context);
+        await navigator.push(
           MaterialPageRoute(
-              builder: (_) => const PermissionScreen(fromSettings: true)),
+            builder: (_) => const PermissionScreen(fromSettings: true),
+          ),
         );
 
         // After returning, re-check overlay
@@ -88,9 +95,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await prefs.setString('protection_mode', oldMode);
           if (!mounted) return;
           setState(() => _protectionMode = oldMode);
+          final strings = LocaleProvider.stringsOf(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Chưa đủ quyền. Đã giữ chế độ Tối đa.'),
+            SnackBar(
+              content: Text(
+                strings.insufficientPermissionsKeepMode.replaceFirst(
+                  '%s',
+                  _modeLabel(strings, oldMode),
+                ),
+              ),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -99,9 +112,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       if (!mounted) return;
+      final strings = LocaleProvider.stringsOf(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Đã chuyển sang chế độ Tiêu chuẩn'),
+        SnackBar(
+          content: Text(
+            strings.switchedToMode.replaceFirst(
+              '%s',
+              _modeLabel(strings, newMode),
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -122,10 +141,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (!hasAccessibility || !hasOverlay) {
         // 3. Missing permissions → navigate to PermissionScreen
-        //    The Gatekeeper will scan and request user to enable them.
-        await Navigator.of(context).push(
+        if (!mounted) return;
+        final navigator = Navigator.of(context);
+        await navigator.push(
           MaterialPageRoute(
-              builder: (_) => const PermissionScreen(fromSettings: true)),
+            builder: (_) => const PermissionScreen(fromSettings: true),
+          ),
         );
 
         // After returning, re-check if user actually granted permissions
@@ -140,9 +161,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await prefs.setString('protection_mode', oldMode);
           if (!mounted) return;
           setState(() => _protectionMode = oldMode);
+          final strings = LocaleProvider.stringsOf(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Chưa đủ quyền. Đã giữ chế độ Tiêu chuẩn.'),
+            SnackBar(
+              content: Text(
+                strings.insufficientPermissionsKeepMode.replaceFirst(
+                  '%s',
+                  _modeLabel(strings, oldMode),
+                ),
+              ),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -151,9 +178,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       if (!mounted) return;
+      final strings = LocaleProvider.stringsOf(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Đã chuyển sang chế độ Tối đa'),
+        SnackBar(
+          content: Text(
+            strings.switchedToMode.replaceFirst(
+              '%s',
+              _modeLabel(strings, newMode),
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -196,8 +229,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           children: [
             // ── Protection Mode Switcher ─────────────────────────────────
-            if (!_isLoading)
-              _buildProtectionModeCard(context),
+            if (!_isLoading) _buildProtectionModeCard(context),
 
             const SizedBox(height: 16),
 
@@ -218,6 +250,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Builds the protection mode switcher card.
   Widget _buildProtectionModeCard(BuildContext context) {
+    final strings = LocaleProvider.stringsOf(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -251,7 +284,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Chế độ bảo vệ',
+                      strings.protectionMode,
                       style: TextStyle(
                         color: AppColors.textPrimaryC(context),
                         fontSize: 15,
@@ -261,9 +294,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _protectionMode == 'standard'
-                          ? 'Đang dùng: Tiêu chuẩn'
-                          : 'Đang dùng: Tối đa',
+                      strings.usingMode.replaceFirst(
+                        '%s',
+                        _modeLabel(strings, _protectionMode),
+                      ),
                       style: TextStyle(
                         color: AppColors.textTertiaryC(context),
                         fontSize: 12,
@@ -291,7 +325,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Expanded(
                   child: _buildModeSegmentButton(
                     context: context,
-                    label: 'Tiêu chuẩn',
+                    label: strings.standardModeShort,
                     icon: Icons.verified_user_rounded,
                     isSelected: _protectionMode == 'standard',
                     onTap: () => _switchMode('standard'),
@@ -301,7 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Expanded(
                   child: _buildModeSegmentButton(
                     context: context,
-                    label: 'Tối đa',
+                    label: strings.maximumModeShort,
                     icon: Icons.security_rounded,
                     isSelected: _protectionMode == 'maximum',
                     onTap: () => _switchMode('maximum'),
@@ -316,8 +350,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── Description text ──────────────────────────────────────────
           Text(
             _protectionMode == 'standard'
-                ? 'Lớp phủ tĩnh, tương thích ứng dụng ngân hàng.'
-                : 'Thuật toán bám sát thao tác, bảo vệ toàn diện.',
+                ? strings.standardModeDesc
+                : strings.maximumModeDesc,
             style: TextStyle(
               color: AppColors.textTertiaryC(context),
               fontSize: 12,
@@ -351,7 +385,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           borderRadius: BorderRadius.circular(10),
           border: isSelected
               ? Border.all(
-                  color: AppColors.gold.withValues(alpha: 0.4), width: 1)
+                  color: AppColors.gold.withValues(alpha: 0.4),
+                  width: 1,
+                )
               : null,
         ),
         child: Center(
@@ -522,7 +558,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           borderRadius: BorderRadius.circular(10),
           border: isSelected
               ? Border.all(
-                  color: AppColors.gold.withValues(alpha: 0.4), width: 1)
+                  color: AppColors.gold.withValues(alpha: 0.4),
+                  width: 1,
+                )
               : null,
         ),
         child: Center(

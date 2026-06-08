@@ -107,6 +107,20 @@ class LocalizedStrings {
   final String settings;
   final String sensorFrontBack;
   final String sensorLeftRight;
+  final String protectionMode;
+  final String protectionModeSubtitle;
+  final String standardMode;
+  final String maximumMode;
+  final String standardModeShort;
+  final String maximumModeShort;
+  final String usingMode;
+  final String standardModeDesc;
+  final String maximumModeDesc;
+  final String insufficientPermissionsKeepMode;
+  final String switchedToMode;
+  final String restrictedSettingsHint;
+  final String restrictedSettingsInstruction;
+  final String chooseProtectionMode;
 
   // ── Tolerance Slider Card (Hysteresis Dead Zone) ─────────────────────
   final String tolerance;
@@ -180,6 +194,20 @@ class LocalizedStrings {
     required this.settings,
     required this.sensorFrontBack,
     required this.sensorLeftRight,
+    required this.protectionMode,
+    required this.protectionModeSubtitle,
+    required this.standardMode,
+    required this.maximumMode,
+    required this.standardModeShort,
+    required this.maximumModeShort,
+    required this.usingMode,
+    required this.standardModeDesc,
+    required this.maximumModeDesc,
+    required this.insufficientPermissionsKeepMode,
+    required this.switchedToMode,
+    required this.restrictedSettingsHint,
+    required this.restrictedSettingsInstruction,
+    required this.chooseProtectionMode,
     required this.tolerance,
     required this.toleranceSubtitle,
     required this.toleranceNarrow,
@@ -280,6 +308,22 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     settings: 'Settings',
     sensorFrontBack: 'Front / Back (Beta)',
     sensorLeftRight: 'Left / Right (Gamma)',
+    protectionMode: 'Protection Mode',
+    protectionModeSubtitle: 'Current mode: %s',
+    standardMode: 'Standard Mode',
+    maximumMode: 'Maximum Mode',
+    standardModeShort: 'Standard',
+    maximumModeShort: 'Maximum',
+    usingMode: 'Using: %s',
+    standardModeDesc: 'Static overlay, compatible with banking apps.',
+    maximumModeDesc: 'Gesture-aware algorithm for full protection.',
+    insufficientPermissionsKeepMode: 'Missing permissions. Kept %s.',
+    switchedToMode: 'Switched to %s',
+    restrictedSettingsHint:
+        'If the toggle is greyed out (restricted), click here',
+    restrictedSettingsInstruction:
+        'Tap 3-dots menu top right -> Allow restricted settings',
+    chooseProtectionMode: 'Choose Protection Mode',
 
     // Tolerance (Hysteresis)
     tolerance: 'Flicker Guard',
@@ -394,6 +438,21 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     settings: 'Cài đặt',
     sensorFrontBack: 'Trước / Sau (Beta)',
     sensorLeftRight: 'Trái / Phải (Gamma)',
+    protectionMode: 'Chế độ bảo vệ',
+    protectionModeSubtitle: 'Đang dùng: %s',
+    standardMode: 'Chế độ Tiêu chuẩn',
+    maximumMode: 'Chế độ Tối đa',
+    standardModeShort: 'Tiêu chuẩn',
+    maximumModeShort: 'Tối đa',
+    usingMode: 'Đang dùng: %s',
+    standardModeDesc: 'Lớp phủ tĩnh, tương thích ứng dụng ngân hàng.',
+    maximumModeDesc: 'Thuật toán bám sát thao tác, bảo vệ toàn diện.',
+    insufficientPermissionsKeepMode: 'Chưa đủ quyền. Đã giữ %s.',
+    switchedToMode: 'Đã chuyển sang %s',
+    restrictedSettingsHint: 'Nếu nút bật bị mờ, nhấn vào đây',
+    restrictedSettingsInstruction:
+        'Chọn dấu 3 chấm góc phải -> Cho phép cài đặt bị hạn chế',
+    chooseProtectionMode: 'Chọn chế độ bảo vệ',
 
     // Vùng chấp nhận lệch (Góc trễ)
     tolerance: 'Vùng chấp nhận lệch',

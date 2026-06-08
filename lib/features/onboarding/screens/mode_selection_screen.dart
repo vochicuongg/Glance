@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/localization/locale_provider.dart';
 import '../../permissions/screens/permission_screen.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final strings = LocaleProvider.stringsOf(context);
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
@@ -123,27 +125,31 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                         // ── Card 1: Standard Mode ─────────────────────────
                         _ModeCard(
                           isSelected: _selectedMode == 'standard',
-                          onTap: () => setState(() => _selectedMode = 'standard'),
+                          onTap: () =>
+                              setState(() => _selectedMode = 'standard'),
                           icon: Icons.verified_user_rounded,
                           badge: 'Khuyên dùng khi Thanh toán',
-                          title: 'Tiêu chuẩn',
+                          title: strings.standardMode,
                           colorScheme: colorScheme,
                           isDark: isDark,
                           theme: theme,
                           features: const [
                             _FeatureItem(
                               icon: Icons.check_circle_outline_rounded,
-                              text: 'Chạy mượt mà, tương thích với mọi ứng dụng',
+                              text:
+                                  'Hoạt động mượt mà, tương thích với mọi ứng dụng.',
                               isPositive: true,
                             ),
                             _FeatureItem(
                               icon: Icons.lock_outline_rounded,
-                              text: 'Yêu cầu quyền: Hiển thị trên ứng dụng khác.',
+                              text:
+                                  'Yêu cầu quyền: Hiển thị trên ứng dụng khác.',
                               isPositive: true,
                             ),
                             _FeatureItem(
                               icon: Icons.info_outline_rounded,
-                              text: 'Lưu ý: Lớp phủ vừa phải, có thể nhìn thấy nội dung ở mức tương đối.',
+                              text:
+                                  'Lưu ý: Lớp phủ vừa phải, có thể nhìn thấy nội dung ở mức tương đối.',
                               isPositive: false,
                             ),
                           ],
@@ -154,27 +160,31 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                         // ── Card 2: Maximum Mode ──────────────────────────
                         _ModeCard(
                           isSelected: _selectedMode == 'maximum',
-                          onTap: () => setState(() => _selectedMode = 'maximum'),
+                          onTap: () =>
+                              setState(() => _selectedMode = 'maximum'),
                           icon: Icons.security_rounded,
                           badge: 'Bảo vệ Toàn diện',
-                          title: 'Tối đa',
+                          title: strings.maximumMode,
                           colorScheme: colorScheme,
                           isDark: isDark,
                           theme: theme,
                           features: const [
                             _FeatureItem(
                               icon: Icons.check_circle_outline_rounded,
-                              text: 'Bảo mật tuyệt đối, vuốt chạm siêu mượt.',
+                              text:
+                                  'Bảo mật cấp độ cao nhất, an tâm tuyệt đối.',
                               isPositive: true,
                             ),
                             _FeatureItem(
                               icon: Icons.lock_outline_rounded,
-                              text: 'Yêu cầu quyền: Trợ năng & Hiển thị trên ứng dụng khác.',
+                              text:
+                                  'Yêu cầu quyền: Trợ năng & Hiển thị trên ứng dụng khác.',
                               isPositive: true,
                             ),
                             _FeatureItem(
                               icon: Icons.info_outline_rounded,
-                              text: 'Lưu ý: Có thể bị một số ứng dụng Tài chính từ chối truy cập.',
+                              text:
+                                  'Lưu ý: Một số ứng dụng Ngân hàng có thể từ chối truy cập.',
                               isPositive: false,
                             ),
                           ],
@@ -196,21 +206,54 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.lightbulb_outline_rounded,
-                                size: 18,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: Text(
-                                  'Lưu ý: Vui lòng đọc kỹ ưu và nhược điểm của từng chế độ. '
-                                  'Bạn luôn có thể thay đổi thiết lập này sau trong phần Cài đặt của ứng dụng.',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    height: 1.5,
-                                    fontStyle: FontStyle.italic,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '⚠️ VUI LÒNG ĐỌC KỸ ƯU VÀ NHƯỢC ĐIỂM CỦA TỪNG CHẾ ĐỘ.',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            height: 2,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                    const SizedBox(
+                                      height: 10,
+                                    ), // Khoảng cách giữa các dòng
+                                    Text(
+                                      '🔒 Khuyên dùng ${strings.standardMode}, tránh lỗi xung đột thanh toán.',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            height: 1.5,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '🛡️ Cam kết KHÔNG thu thập bất kỳ dữ liệu cá nhân.',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            height: 1.5,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      ' ⚙️ Thay đổi chế độ dễ dàng trong mục Cài đặt.',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            height: 1.5,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -289,8 +332,9 @@ class _ModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        isSelected ? colorScheme.primary : colorScheme.outlineVariant;
+    final borderColor = isSelected
+        ? colorScheme.primary
+        : colorScheme.outlineVariant;
     final bgColor = isSelected
         ? colorScheme.primaryContainer.withValues(alpha: isDark ? 0.25 : 0.15)
         : colorScheme.surfaceContainerLow;
@@ -301,10 +345,7 @@ class _ModeCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: borderColor,
-          width: isSelected ? 2.0 : 1.0,
-        ),
+        border: Border.all(color: borderColor, width: isSelected ? 2.0 : 1.0),
       ),
       child: Material(
         color: Colors.transparent,
@@ -394,36 +435,38 @@ class _ModeCard extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 // ── Feature list ──────────────────────────────────────────
-                ...features.map((f) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            f.icon,
-                            size: 16,
-                            color: f.isPositive
-                                ? colorScheme.primary
-                                : colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              f.text,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: f.isPositive
-                                    ? colorScheme.onSurface
-                                    : colorScheme.onSurfaceVariant,
-                                height: 1.4,
-                                fontStyle: f.isPositive
-                                    ? FontStyle.normal
-                                    : FontStyle.italic,
-                              ),
+                ...features.map(
+                  (f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          f.icon,
+                          size: 16,
+                          color: f.isPositive
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            f.text,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: f.isPositive
+                                  ? colorScheme.onSurface
+                                  : colorScheme.onSurfaceVariant,
+                              height: 1.4,
+                              fontStyle: f.isPositive
+                                  ? FontStyle.normal
+                                  : FontStyle.italic,
                             ),
                           ),
-                        ],
-                      ),
-                    )),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

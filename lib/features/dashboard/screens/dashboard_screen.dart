@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/localization/app_strings.dart';
@@ -59,8 +60,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    GlanceChannelService.channel.setMethodCallHandler(_handleNativeMethodCall);
     _syncServiceState();
     _loadSavedSettings(); // Restore sliders from Native SharedPreferences
+  }
+
+  Future<dynamic> _handleNativeMethodCall(MethodCall call) async {
+    if (call.method == 'showModeSelectionMenu' && mounted) {
+      await _showModeSelectionMenu();
+    }
   }
 
   /// Reads the user's last-saved tolerance & sensitivity from Native
@@ -151,10 +159,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       final prefs = await SharedPreferences.getInstance();
       final protectionMode = prefs.getString('protection_mode') ?? 'maximum';
 
-      final accessibility =
-          await GlanceChannelService.isAccessibilityEnabled();
-      final overlay =
-          await GlanceChannelService.isOverlayPermissionGranted();
+      final accessibility = await GlanceChannelService.isAccessibilityEnabled();
+      final overlay = await GlanceChannelService.isOverlayPermissionGranted();
 
       // Standard mode: only overlay needed; Maximum mode: both needed
       final bool permissionsMissing;
@@ -176,9 +182,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
         // Redirect to PermissionScreen to re-grant missing permissions
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => const PermissionScreen(),
-          ),
+          MaterialPageRoute(builder: (_) => const PermissionScreen()),
         );
         return;
       }
@@ -200,7 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       } else {
         await _channelService.stopService();
         // Reset calibration status when service stops
-          setState(() => _isCalibrated = false);
+        setState(() => _isCalibrated = false);
       }
     } on GlanceServiceException catch (e) {
       // Revert the toggle on failure
@@ -224,7 +228,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       await _channelService.calibrate();
       setState(() => _isCalibrated = true);
       if (mounted) {
-        _showSnackBar(LocaleProvider.stringsOf(context).calibrateSuccess, isError: false);
+        _showSnackBar(
+          LocaleProvider.stringsOf(context).calibrateSuccess,
+          isError: false,
+        );
       }
     } on GlanceServiceException catch (e) {
       if (mounted) {
@@ -296,7 +303,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   void _handleDefineArea() {
     Navigator.of(context).push(
       PageRouteBuilder(
-        opaque: false, // Allow previous route to show through (transparent background)
+        opaque:
+            false, // Allow previous route to show through (transparent background)
         pageBuilder: (context, animation, secondaryAnimation) {
           return const TargetedAreaEditor();
         },
@@ -308,13 +316,16 @@ class _DashboardScreenState extends State<DashboardScreen>
               curve: Curves.easeOutCubic,
             ),
             child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.05),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              )),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 0.05),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             ),
           );
@@ -322,6 +333,158 @@ class _DashboardScreenState extends State<DashboardScreen>
         transitionDuration: const Duration(milliseconds: 350),
         reverseTransitionDuration: const Duration(milliseconds: 250),
       ),
+    );
+  }
+
+  Future<void> _switchProtectionMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    final oldMode = _protectionMode;
+    if (mode == oldMode) return;
+
+    if (mode == 'standard') {
+      await GlanceChannelService.revokeAccessibility();
+      await prefs.setString('protection_mode', mode);
+      if (!mounted) return;
+      setState(() => _protectionMode = mode);
+      _showSnackBar(
+        LocaleProvider.stringsOf(context).switchedToMode.replaceFirst(
+          '%s',
+          LocaleProvider.stringsOf(context).standardMode,
+        ),
+        isError: false,
+      );
+      return;
+    }
+
+    await prefs.setString('protection_mode', mode);
+    if (!mounted) return;
+    setState(() => _protectionMode = mode);
+
+    final hasAccessibility =
+        await GlanceChannelService.isAccessibilityEnabled();
+    final hasOverlay = await GlanceChannelService.isOverlayPermissionGranted();
+    if (!hasAccessibility || !hasOverlay) {
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const PermissionScreen(fromSettings: true),
+        ),
+      );
+      if (!mounted) return;
+      final recheckAccessibility =
+          await GlanceChannelService.isAccessibilityEnabled();
+      final recheckOverlay =
+          await GlanceChannelService.isOverlayPermissionGranted();
+      if (!recheckAccessibility || !recheckOverlay) {
+        await prefs.setString('protection_mode', oldMode);
+        if (!mounted) return;
+        setState(() => _protectionMode = oldMode);
+        final strings = LocaleProvider.stringsOf(context);
+        _showSnackBar(
+          strings.insufficientPermissionsKeepMode.replaceFirst(
+            '%s',
+            oldMode == 'standard' ? strings.standardMode : strings.maximumMode,
+          ),
+        );
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    _showSnackBar(
+      LocaleProvider.stringsOf(context).switchedToMode.replaceFirst(
+        '%s',
+        LocaleProvider.stringsOf(context).maximumMode,
+      ),
+      isError: false,
+    );
+  }
+
+  Future<void> _showModeSelectionMenu() async {
+    final strings = LocaleProvider.stringsOf(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.cardSurface(context),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.border(context), width: 0.5),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                strings.chooseProtectionMode,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.textPrimaryC(context),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildModeSheetTile(
+                title: strings.standardMode,
+                subtitle: strings.standardModeDesc,
+                icon: Icons.verified_user_rounded,
+                selected: _protectionMode == 'standard',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _switchProtectionMode('standard');
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildModeSheetTile(
+                title: strings.maximumMode,
+                subtitle: strings.maximumModeDesc,
+                icon: Icons.security_rounded,
+                selected: _protectionMode == 'maximum',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _switchProtectionMode('maximum');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeSheetTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      tileColor: selected
+          ? AppColors.gold.withValues(alpha: 0.12)
+          : AppColors.surface(context),
+      leading: Icon(
+        icon,
+        color: selected ? AppColors.gold : AppColors.textTertiaryC(context),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: AppColors.textPrimaryC(context),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: AppColors.textTertiaryC(context), fontSize: 12),
+      ),
+      trailing: selected
+          ? const Icon(Icons.check_circle_rounded, color: AppColors.gold)
+          : null,
     );
   }
 
@@ -333,8 +496,9 @@ class _DashboardScreenState extends State<DashboardScreen>
           message,
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
         ),
-        backgroundColor:
-            isError ? AppColors.statusInactive : AppColors.darkCharcoal,
+        backgroundColor: isError
+            ? AppColors.statusInactive
+            : AppColors.darkCharcoal,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -441,10 +605,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: Text(
-                strings.notNow,
-                style: const TextStyle(fontSize: 14),
-              ),
+              child: Text(strings.notNow, style: const TextStyle(fontSize: 14)),
             ),
           ),
         ],
@@ -490,10 +651,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   Text(
                     'GLANCE',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          letterSpacing: 3,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
-                        ),
+                      letterSpacing: 3,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                    ),
                   ),
                 ],
               ),
@@ -502,9 +663,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 IconButton(
                   onPressed: () async {
                     await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SettingsScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
                     );
                     _loadSavedSettings();
                   },
@@ -575,15 +734,21 @@ class _DashboardScreenState extends State<DashboardScreen>
                           child: Icon(
                             Icons.info_outline_rounded,
                             size: 14,
-                            color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
+                            color: AppColors.textTertiaryC(
+                              context,
+                            ).withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            LocaleProvider.stringsOf(context).overlayTouchWarning,
+                            LocaleProvider.stringsOf(
+                              context,
+                            ).overlayTouchWarning,
                             style: TextStyle(
-                              color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
+                              color: AppColors.textTertiaryC(
+                                context,
+                              ).withValues(alpha: 0.6),
                               fontSize: 11,
                               fontStyle: FontStyle.italic,
                               height: 1.4,
@@ -777,9 +942,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       top: 0,
                       bottom: 0,
                       width: 1,
-                      child: Container(
-                        color: AppColors.border(context),
-                      ),
+                      child: Container(color: AppColors.border(context)),
                     ),
                     // Animated Gold Bar
                     AnimatedPositioned(
@@ -828,9 +991,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             Text(
               strings.footerText,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
-                    fontSize: 11,
-                  ),
+                color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
+                fontSize: 11,
+              ),
             ),
           ],
         ),

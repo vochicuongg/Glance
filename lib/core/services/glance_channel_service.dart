@@ -30,7 +30,8 @@ import 'package:flutter/services.dart';
 /// ─────────────────────────────────────────────────────────────────────────────
 class GlanceChannelService {
   /// Single shared channel matching the native side's registration.
-  static const _channel = MethodChannel('com.glanceapp.glance/overlay');
+  static const channel = MethodChannel('com.glanceapp.glance/overlay');
+  static const _channel = channel;
 
   /// EventChannel for real-time sensor data streaming from native service.
   /// Receives Map events with keys "beta" (pitch) and "gamma" (roll) in degrees.
@@ -120,7 +121,9 @@ class GlanceChannelService {
   /// Returns `true` if the accessibility service is enabled, `false` otherwise.
   static Future<bool> isAccessibilityEnabled() async {
     try {
-      final result = await _channel.invokeMethod<bool>('isAccessibilityEnabled');
+      final result = await _channel.invokeMethod<bool>(
+        'isAccessibilityEnabled',
+      );
       return result ?? false;
     } on MissingPluginException {
       return false;
@@ -136,7 +139,9 @@ class GlanceChannelService {
   /// started/stopped programmatically — the user must toggle it in Settings.
   static Future<bool> openAccessibilitySettings() async {
     try {
-      final result = await _channel.invokeMethod<bool>('openAccessibilitySettings');
+      final result = await _channel.invokeMethod<bool>(
+        'openAccessibilitySettings',
+      );
       return result ?? false;
     } on MissingPluginException {
       return false;
@@ -152,7 +157,9 @@ class GlanceChannelService {
   /// On Android < 6.0, this always returns `true` (permission not needed).
   static Future<bool> isOverlayPermissionGranted() async {
     try {
-      final result = await _channel.invokeMethod<bool>('isOverlayPermissionGranted');
+      final result = await _channel.invokeMethod<bool>(
+        'isOverlayPermissionGranted',
+      );
       return result ?? false;
     } on MissingPluginException {
       return false;
@@ -191,7 +198,9 @@ class GlanceChannelService {
   }) async {
     try {
       final Map<String, String> args = {};
-      if (notificationTitle != null) args['notificationTitle'] = notificationTitle;
+      if (notificationTitle != null) {
+        args['notificationTitle'] = notificationTitle;
+      }
       if (notificationText != null) args['notificationText'] = notificationText;
       final result = await _channel.invokeMethod<bool>('startService', args);
       return result ?? false;
@@ -204,9 +213,7 @@ class GlanceChannelService {
       //   'PERMISSION_DENIED' when overlay permission is denied (legacy)
       //   'ACCESSIBILITY_NOT_ENABLED' when accessibility service is not enabled
       if (e.code == 'ACCESSIBILITY_NOT_ENABLED') {
-        throw GlanceServiceException(
-          'ACCESSIBILITY_NOT_ENABLED: ${e.message}',
-        );
+        throw GlanceServiceException('ACCESSIBILITY_NOT_ENABLED: ${e.message}');
       }
       throw GlanceServiceException(
         e.code == 'PERMISSION_DENIED'
@@ -251,17 +258,14 @@ class GlanceChannelService {
   /// Higher sensitivity → lower tolerance (reacts to slight tilts).
   Future<bool> setSensitivity(double value) async {
     try {
-      final result = await _channel.invokeMethod<bool>(
-        'setSensitivity',
-        {'value': value},
-      );
+      final result = await _channel.invokeMethod<bool>('setSensitivity', {
+        'value': value,
+      });
       return result ?? false;
     } on MissingPluginException {
       return false;
     } on PlatformException catch (e) {
-      throw GlanceServiceException(
-        'Failed to set sensitivity: ${e.message}',
-      );
+      throw GlanceServiceException('Failed to set sensitivity: ${e.message}');
     }
   }
 
@@ -274,17 +278,14 @@ class GlanceChannelService {
   /// [setTargetedArea].
   Future<bool> setOverlayMode(String mode) async {
     try {
-      final result = await _channel.invokeMethod<bool>(
-        'setOverlayMode',
-        {'mode': mode},
-      );
+      final result = await _channel.invokeMethod<bool>('setOverlayMode', {
+        'mode': mode,
+      });
       return result ?? false;
     } on MissingPluginException {
       return false;
     } on PlatformException catch (e) {
-      throw GlanceServiceException(
-        'Failed to set overlay mode: ${e.message}',
-      );
+      throw GlanceServiceException('Failed to set overlay mode: ${e.message}');
     }
   }
 
@@ -332,28 +333,23 @@ class GlanceChannelService {
     // but WindowManager starts from the absolute screen top.
     // Adding statusBarHeight aligns both coordinate systems.
     final int physicalX = (logicalX * devicePixelRatio).round();
-    final int physicalY =
-        ((logicalY + statusBarHeight) * devicePixelRatio).round();
+    final int physicalY = ((logicalY + statusBarHeight) * devicePixelRatio)
+        .round();
     final int physicalWidth = (logicalWidth * devicePixelRatio).round();
     final int physicalHeight = (logicalHeight * devicePixelRatio).round();
 
     try {
-      final result = await _channel.invokeMethod<bool>(
-        'setTargetedArea',
-        {
-          'x': physicalX,
-          'y': physicalY,
-          'width': physicalWidth,
-          'height': physicalHeight,
-        },
-      );
+      final result = await _channel.invokeMethod<bool>('setTargetedArea', {
+        'x': physicalX,
+        'y': physicalY,
+        'width': physicalWidth,
+        'height': physicalHeight,
+      });
       return result ?? false;
     } on MissingPluginException {
       return false;
     } on PlatformException catch (e) {
-      throw GlanceServiceException(
-        'Failed to set targeted area: ${e.message}',
-      );
+      throw GlanceServiceException('Failed to set targeted area: ${e.message}');
     }
   }
 
@@ -369,17 +365,14 @@ class GlanceChannelService {
   ///   • 20° = wide dead zone, very stable but slower response
   Future<bool> setTolerance(double tolerance) async {
     try {
-      final result = await _channel.invokeMethod<bool>(
-        'setTolerance',
-        {'tolerance': tolerance},
-      );
+      final result = await _channel.invokeMethod<bool>('setTolerance', {
+        'tolerance': tolerance,
+      });
       return result ?? false;
     } on MissingPluginException {
       return false;
     } on PlatformException catch (e) {
-      throw GlanceServiceException(
-        'Failed to set tolerance: ${e.message}',
-      );
+      throw GlanceServiceException('Failed to set tolerance: ${e.message}');
     }
   }
 
@@ -390,8 +383,9 @@ class GlanceChannelService {
   /// Falls back to safe defaults (0.8 / 5.0) if the read fails.
   static Future<Map<String, dynamic>> getSettingsFromNative() async {
     try {
-      final Map<dynamic, dynamic>? result =
-          await _channel.invokeMethod('getSettingsFromNative');
+      final Map<dynamic, dynamic>? result = await _channel.invokeMethod(
+        'getSettingsFromNative',
+      );
       if (result != null) {
         return {
           'opacity': (result['opacity'] as num).toDouble(),
@@ -403,7 +397,12 @@ class GlanceChannelService {
     } catch (e) {
       debugPrint("Error reading settings from native: $e");
     }
-    return {'opacity': 0.8, 'tolerance': 5.0, 'sensitivity': 0.5, 'isCalibrated': false};
+    return {
+      'opacity': 0.8,
+      'tolerance': 5.0,
+      'sensitivity': 0.5,
+      'isCalibrated': false,
+    };
   }
 
   /// Revokes the Accessibility permission for MaxOverlayService by calling
@@ -427,6 +426,17 @@ class GlanceChannelService {
     }
   }
 
+  /// Opens Android's App Info screen so users can allow restricted settings.
+  static Future<void> openAppDetails() async {
+    try {
+      await _channel.invokeMethod('openAppDetails');
+    } on MissingPluginException {
+      return;
+    } on PlatformException catch (e) {
+      debugPrint('Failed to open App Info: ${e.message}');
+    }
+  }
+
   /// Saves the current opacity and tolerance settings to native SharedPreferences.
   ///
   /// This allows the Quick Settings Tile (GlanceTileService) to read the
@@ -434,7 +444,11 @@ class GlanceChannelService {
   /// the Flutter UI being open.
   ///
   /// Called whenever the user changes the Tolerance slider.
-  static Future<void> saveSettingsToNative(double opacity, double tolerance, double sensitivity) async {
+  static Future<void> saveSettingsToNative(
+    double opacity,
+    double tolerance,
+    double sensitivity,
+  ) async {
     try {
       await _channel.invokeMethod('saveSettingsToNative', {
         'opacity': opacity,
@@ -448,7 +462,6 @@ class GlanceChannelService {
       debugPrint("Error syncing settings to native: $e");
     }
   }
-
 }
 
 /// Custom exception for Glance service errors.

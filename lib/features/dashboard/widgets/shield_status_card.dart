@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -100,19 +99,19 @@ class _ModeLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final locale = LocaleProvider.of(context).locale;
+    final strings = LocaleProvider.stringsOf(context);
     final isStandard = protectionMode == 'standard';
-    final label = locale == AppLocale.vi
-        ? (isStandard ? 'Tiêu chuẩn' : 'Tối đa')
-        : (isStandard ? 'Standard' : 'Maximum');
+    final label = isStandard ? strings.standardMode : strings.maximumMode;
 
     return AnimatedDefaultTextStyle(
       duration: const Duration(milliseconds: 250),
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: (isActive
-                    ? AppColors.accent(context)
-                    : AppColors.textTertiaryC(context))
-                .withValues(alpha: isActive ? 0.95 : 0.65),
+      style:
+          Theme.of(context).textTheme.labelLarge?.copyWith(
+            color:
+                (isActive
+                        ? AppColors.accent(context)
+                        : AppColors.textTertiaryC(context))
+                    .withValues(alpha: isActive ? 0.95 : 0.65),
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
           ) ??
@@ -199,8 +198,9 @@ class _ServiceToggle extends StatelessWidget {
                   boxShadow: isActive
                       ? [
                           BoxShadow(
-                            color:
-                                AppColors.statusActive.withValues(alpha: 0.5),
+                            color: AppColors.statusActive.withValues(
+                              alpha: 0.5,
+                            ),
                             blurRadius: 6,
                           ),
                         ]
@@ -213,15 +213,12 @@ class _ServiceToggle extends StatelessWidget {
                     ? LocaleProvider.stringsOf(context).serviceRunning
                     : LocaleProvider.stringsOf(context).serviceStopped,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.textSecondaryC(context),
-                    ),
+                  color: AppColors.textSecondaryC(context),
+                ),
               ),
             ],
           ),
-          Switch(
-            value: isActive,
-            onChanged: onToggle,
-          ),
+          Switch(value: isActive, onChanged: onToggle),
         ],
       ),
     );

@@ -53,6 +53,19 @@ class MainActivity : FlutterActivity() {
     /// Pending MethodChannel result to resolve after accessibility grant.
     private var pendingResult: MethodChannel.Result? = null
 
+    private var pendingShowModeSelectionMenu = false
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleQuickSettingsPreferencesIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleQuickSettingsPreferencesIntent(intent)
+    }
+
     // ── Helper: Read protection mode from Flutter SharedPreferences ────────
     private fun getProtectionMode(): String {
         val flutterPrefs = getSharedPreferences(
@@ -145,6 +158,10 @@ class MainActivity : FlutterActivity() {
                     openAccessibilitySettings()
                     result.success(true)
                 }
+                "openAppDetails" -> {
+                    openAppDetails()
+                    result.success(true)
+                }
                 "revokeAccessibility" -> {
                     // ── Self-destruct: send REVOKE broadcast to MaxOverlayService ──
                     sendBroadcast(Intent(MaxOverlayService.ACTION_REVOKE_ACCESSIBILITY).apply {
@@ -218,6 +235,7 @@ class MainActivity : FlutterActivity() {
         }
 
         Log.d(TAG, "MethodChannel '$CHANNEL' configured")
+        flushPendingQuickSettingsAction()
 
         // ── EventChannel for real-time sensor data streaming ──────────────
         sensorEventChannel = EventChannel(
@@ -495,6 +513,32 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivityForResult(intent, ACCESSIBILITY_SETTINGS_REQUEST)
+    }
+
+    private fun openAppDetails() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:$packageName")
+        ).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
+    }
+
+    private fun handleQuickSettingsPreferencesIntent(intent: Intent?) {
+        if (intent?.action != "android.service.quicksettings.action.QS_TILE_PREFERENCES") {
+            return
+        }
+        pendingShowModeSelectionMenu = true
+        flushPendingQuickSettingsAction()
+    }
+
+    private fun flushPendingQuickSettingsAction() {
+        val channel = methodChannel ?: return
+        if (!pendingShowModeSelectionMenu) return
+        pendingShowModeSelectionMenu = false
+        channel.invokeMethod("showModeSelectionMenu", null)
+        Log.d(TAG, "QS_TILE_PREFERENCES — requested Flutter mode menu")
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
