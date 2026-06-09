@@ -112,6 +112,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   ///   1. Set [_isServiceActive] = true so the UI shows the active state.
   ///   2. Force the sensor stream cache to refresh so [StreamBuilder] in
   ///      [_buildSensorBars] immediately starts receiving beta/gamma data.
+  ///   3. Sync `isActive` to SharedPreferences so the Quick Settings Tile
+  ///      always reads the correct state (fixes Dart↔Kotlin phase mismatch).
   ///
   /// The method is fire-and-forget from [initState] but uses [mounted]
   /// guard to avoid calling [setState] after the widget is disposed.
@@ -125,6 +127,13 @@ class _DashboardScreenState extends State<DashboardScreen>
           if (!isRunning) _isCalibrated = false;
         });
       }
+
+      // ── Sync isActive to SharedPreferences for Quick Settings Tile ──
+      // The Tile reads `flutter.isActive` to determine toggle state.
+      // Flutter must write this key so the Tile stays in phase.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isActive', isRunning);
+
       if (isRunning) {
         // Force the sensor stream to re-establish so the Beta/Gamma
         // bars update immediately. Clearing the cache causes the next
@@ -206,6 +215,10 @@ class _DashboardScreenState extends State<DashboardScreen>
         // Reset calibration status when service stops
         setState(() => _isCalibrated = false);
       }
+
+      // ── Sync isActive to SharedPreferences for Quick Settings Tile ──
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isActive', value);
     } on GlanceServiceException catch (e) {
       // Revert the toggle on failure
       setState(() => _isServiceActive = false);
@@ -635,7 +648,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Image.asset(
-                      'assets/glance-logo.png',
+                      'assets/glance-favicon.png',
                       width: 32,
                       height: 32,
                     ),

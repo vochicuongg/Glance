@@ -10,7 +10,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 
 /// ─────────────────────────────────────────────────────────────────────────────
-/// GlanceTileService — Quick Settings Tile (Dual-Engine Architecture)
+/// GlanceQuickTileService — Quick Settings Tile (Dual-Engine Architecture)
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
 /// Adds a toggle tile to the Android Quick Settings panel (notification shade).
@@ -19,6 +19,11 @@ import androidx.core.content.ContextCompat
 ///   • Reads protection_mode from Flutter SharedPreferences
 ///   • Standard mode → starts/stops StandardOverlayService (foreground service)
 ///   • Maximum mode  → hibernates/resumes MaxOverlayService (accessibility service)
+///
+/// DISK-BASED STATE:
+///   • All toggle state is persisted via SharedPreferences ("flutter.isActive")
+///   • No dependency on in-memory isRunning flags for toggle logic
+///   • Survives app kills and process restarts
 ///
 /// Standard mode:
 ///   • If overlay NOT granted → opens Overlay Settings
@@ -31,25 +36,19 @@ import androidx.core.content.ContextCompat
 ///   • If accessibility IS enabled & hibernated → sends ACTION_RESUME_SERVICE (wake)
 ///   • NEVER calls disableSelf() or stopService()
 /// ─────────────────────────────────────────────────────────────────────────────
-class GlanceTileService : TileService() {
+class GlanceQuickTileService : TileService() {
 
     companion object {
-        private const val TAG = "GlanceTileService"
+        private const val TAG = "GlanceQuickTileService"
     }
+
+    // ── Helper: Get Flutter SharedPreferences instance ─────────────────────
+    private fun getFlutterPrefs() =
+        getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
 
     // ── Helper: Read protection mode from Flutter SharedPreferences ────────
     private fun getProtectionMode(): String {
-        val flutterPrefs = getSharedPreferences(
-            "FlutterSharedPreferences", Context.MODE_PRIVATE
-        )
-        return flutterPrefs.getString(
-            "flutter.protection_mode", "maximum"
-        ) ?: "maximum"
-    }
-
-    // ── Helper: Check if EITHER service is currently running ───────────────
-    private fun isAnyServiceRunning(): Boolean {
-        return MaxOverlayService.isRunning || StandardOverlayService.isRunning
+        return getFlutterPrefs().getString("flutter.protection_mode", "maximum") ?: "maximum"
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -63,36 +62,55 @@ class GlanceTileService : TileService() {
      */
     override fun onStartListening() {
         super.onStartListening()
-        Log.d(TAG, "onStartListening — syncing tile state (Max=${MaxOverlayService.isRunning}, Std=${StandardOverlayService.isRunning})")
+        Log.d(TAG, "onStartListening — syncing tile state from SharedPreferences")
         updateTileState()
     }
 
     /**
      * Called when the user taps the tile.
-     * Routes to the correct service based on protection_mode.
+     *
+     * DISK-BASED TOGGLE LOGIC:
+     *   1. Read current isActive from SharedPreferences (disk, not memory)
+     *   2. Invert state (OFF → ON, ON → OFF)
+     *   3. Write new state back to SharedPreferences immediately
+     *   4. Route to correct service engine based on protection_mode
+     *   5. Update tile UI immediately
      */
     override fun onClick() {
         super.onClick()
+
+        // ── Step 1: Read state from disk ────────────────────────────────────
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val currentlyActive = prefs.getBoolean("flutter.isActive", false)
+
+        // ── Step 2: Invert state ────────────────────────────────────────────
+        val newState = !currentlyActive
+
         val mode = getProtectionMode()
-        Log.d(TAG, "onClick — mode=$mode, MaxRunning=${MaxOverlayService.isRunning}, StdRunning=${StandardOverlayService.isRunning}")
+        Log.d(TAG, "onClick — mode=$mode, currentlyActive=$currentlyActive, newState=$newState")
 
         val tile = qsTile ?: return
 
+        // ── Step 3: Write new state to disk immediately ─────────────────────
+        prefs.edit().putBoolean("flutter.isActive", newState).apply()
+
+        // ── Step 4: Route to correct engine ─────────────────────────────────
         if (mode == "standard") {
-            handleStandardModeTile(tile)
+            handleStandardModeTile(tile, newState)
         } else {
-            handleMaxModeTile(tile)
+            handleMaxModeTile(tile, newState)
         }
+
+        // ── Step 5: Update tile UI immediately ──────────────────────────────
+        updateTileState()
     }
 
     // ── Standard mode tile handler ────────────────────────────────────────
 
-    private fun handleStandardModeTile(tile: Tile) {
-        if (StandardOverlayService.isRunning) {
+    private fun handleStandardModeTile(tile: Tile, activate: Boolean) {
+        if (!activate) {
             // ── STOP: Send broadcast so the service can stopForeground + stopSelf ──
-            tile.state = Tile.STATE_INACTIVE
-            tile.updateTile()
-            Log.d(TAG, "Standard — Tile UI → INACTIVE")
+            Log.d(TAG, "Standard — deactivating service")
 
             sendBroadcast(Intent(StandardOverlayService.ACTION_STOP_SERVICE).apply {
                 setPackage(packageName)
@@ -102,8 +120,9 @@ class GlanceTileService : TileService() {
             // ── START: Check overlay permission, then start foreground service ─────
             if (!Settings.canDrawOverlays(this)) {
                 Log.w(TAG, "Standard — overlay permission missing, opening settings")
-                tile.state = Tile.STATE_INACTIVE
-                tile.updateTile()
+                // Revert isActive since we can't actually start
+                getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                    .edit().putBoolean("flutter.isActive", false).apply()
 
                 val settingsIntent = Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -115,13 +134,9 @@ class GlanceTileService : TileService() {
                 return
             }
 
-            tile.state = Tile.STATE_ACTIVE
-            tile.updateTile()
-            Log.d(TAG, "Standard — Tile UI → ACTIVE")
+            Log.d(TAG, "Standard — activating foreground service")
 
             // Start as foreground service with START_STANDARD_MODE action.
-            // This action is handled in onStartCommand() which ALWAYS calls
-            // startForeground() first, preventing ForegroundServiceDidNotStartInTimeException.
             val serviceIntent = Intent(this, StandardOverlayService::class.java).apply {
                 action = StandardOverlayService.ACTION_START_STANDARD_MODE
             }
@@ -132,12 +147,10 @@ class GlanceTileService : TileService() {
 
     // ── Maximum mode tile handler ─────────────────────────────────────────
 
-    private fun handleMaxModeTile(tile: Tile) {
-        if (MaxOverlayService.isRunning) {
+    private fun handleMaxModeTile(tile: Tile, activate: Boolean) {
+        if (!activate) {
             // ── HIBERNATE: Send broadcast to hide overlay & pause sensor ──
-            tile.state = Tile.STATE_INACTIVE
-            tile.updateTile()
-            Log.d(TAG, "Max — Tile UI → INACTIVE")
+            Log.d(TAG, "Max — hibernating service")
 
             sendBroadcast(Intent(MaxOverlayService.ACTION_STOP_SERVICE).apply {
                 setPackage(packageName)
@@ -146,9 +159,7 @@ class GlanceTileService : TileService() {
         } else {
             // ── RESUME: Check if accessibility is enabled ─────────────────
             if (MaxOverlayService.isAccessibilityEnabled(this)) {
-                tile.state = Tile.STATE_ACTIVE
-                tile.updateTile()
-                Log.d(TAG, "Max — Tile UI → ACTIVE")
+                Log.d(TAG, "Max — resuming service")
 
                 sendBroadcast(Intent(MaxOverlayService.ACTION_RESUME_SERVICE).apply {
                     setPackage(packageName)
@@ -157,8 +168,9 @@ class GlanceTileService : TileService() {
             } else {
                 // Accessibility not enabled — guide user to settings
                 Log.w(TAG, "Max — Accessibility not enabled, opening settings")
-                tile.state = Tile.STATE_INACTIVE
-                tile.updateTile()
+                // Revert isActive since we can't actually start
+                getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                    .edit().putBoolean("flutter.isActive", false).apply()
 
                 val settingsIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -169,20 +181,33 @@ class GlanceTileService : TileService() {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  TILE UI UPDATE
+    //  TILE UI UPDATE (DISK-BASED)
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * Updates the tile's visual state based on whether ANY service is running.
+     * Updates the tile's visual state based on SharedPreferences isActive flag.
+     *
+     * Reads flutter.isActive from disk (not in-memory isRunning flags)
+     * to determine tile state. This ensures correct state even after
+     * process restarts or app kills.
      */
     private fun updateTileState() {
         val tile = qsTile ?: return
 
-        // ── Read current protection mode for subtitle ─────────────────────
+        // ── Read state from disk ────────────────────────────────────────────
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val isActive = prefs.getBoolean("flutter.isActive", false)
         val mode = getProtectionMode()
-        val modeSubtitle = if (mode == "standard") "Tiêu chuẩn" else "Tối đa"
 
-        if (isAnyServiceRunning()) {
+        // ── Determine subtitle ──────────────────────────────────────────────
+        val modeSubtitle = if (isActive) {
+            if (mode == "standard") "Tiêu chuẩn" else "Tối đa"
+        } else {
+            "Đã tắt"
+        }
+
+        // ── Update tile visual state ────────────────────────────────────────
+        if (isActive) {
             tile.state = Tile.STATE_ACTIVE
             tile.label = "Glance"
             tile.contentDescription = "Glance privacy shield is active"
@@ -192,12 +217,12 @@ class GlanceTileService : TileService() {
             tile.contentDescription = "Glance privacy shield is inactive"
         }
 
-        // ── Set subtitle (available from Android 10 / API 29+) ────────────
+        // ── Push subtitle (Android 10+) ─────────────────────────────────────
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = modeSubtitle
         }
 
         tile.updateTile()
-        Log.d(TAG, "Tile updated: state=${if (tile.state == Tile.STATE_ACTIVE) "ACTIVE" else "INACTIVE"}, subtitle=$modeSubtitle")
+        Log.d(TAG, "Tile updated: state=${if (isActive) "ACTIVE" else "INACTIVE"}, subtitle=$modeSubtitle")
     }
 }

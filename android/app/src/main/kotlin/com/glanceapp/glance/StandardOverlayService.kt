@@ -589,7 +589,7 @@ class StandardOverlayService : Service(), SensorEventListener {
         try {
             TileService.requestListeningState(
                 this,
-                ComponentName(this, GlanceTileService::class.java)
+                ComponentName(this, GlanceQuickTileService::class.java)
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to notify tile: ${e.message}")

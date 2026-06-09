@@ -89,9 +89,9 @@
              start/stop the GlanceOverlayService without opening the app.
              ════════════════════════════════════════════════════════════════ -->
         <service
-            android:name=".GlanceTileService"
+            android:name=".GlanceQuickTileService"
             android:label="Glance"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@drawable/ic_tile_vector_logo"
             android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

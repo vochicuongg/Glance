@@ -97,12 +97,16 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                   height: 72,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: colorScheme.primaryContainer,
+                    color: Colors.amber.withValues(alpha: 0.12),
+                    border: Border.all(
+                      color: Colors.amber.withValues(alpha: 0.3),
+                      width: 1.5,
+                    ),
                   ),
-                  child: Icon(
-                    Icons.shield_rounded,
-                    size: 36,
-                    color: colorScheme.primary,
+                  child: const Icon(
+                    Icons.verified_user_rounded,
+                    size: 40,
+                    color: Colors.amber,
                   ),
                 ),
                 const SizedBox(height: 20),

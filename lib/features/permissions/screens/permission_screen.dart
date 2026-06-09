@@ -374,11 +374,22 @@ class _PermissionStepView extends StatelessWidget {
           const SizedBox(height: 32),
 
           // ── Permission Icon ─────────────────────────────────────────────
-          Image.asset(
-            'assets/glance-favicon.png',
+          Container(
             width: 80,
             height: 80,
-            fit: BoxFit.contain,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.amber.withValues(alpha: 0.12),
+              border: Border.all(
+                color: Colors.amber.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              icon,
+              color: Colors.amber,
+              size: 32,
+            ),
           ),
           const SizedBox(height: 24),
 

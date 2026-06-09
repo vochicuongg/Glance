@@ -439,7 +439,7 @@ class GlanceChannelService {
 
   /// Saves the current opacity and tolerance settings to native SharedPreferences.
   ///
-  /// This allows the Quick Settings Tile (GlanceTileService) to read the
+  /// This allows the Quick Settings Tile (GlanceQuickTileService) to read the
   /// user's configured values when starting the overlay service without
   /// the Flutter UI being open.
   ///

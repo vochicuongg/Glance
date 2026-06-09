@@ -1,15 +1,41 @@
-BƯỚC 1: CẬP NHẬT PUBSPEC.YAML
+BƯỚC 1: ĐỔI TÊN TILE SERVICE ĐỂ TRIỆT TIÊU CACHE HỆ THỐNG
 
-Mở pubspec.yaml và thêm đường dẫn asset mới vào ngay dưới mục assets: để Flutter có quyền truy cập ảnh:
+Sử dụng tool đổi tên file: Đổi android/app/src/main/kotlin/com/glanceapp/glance/GlanceTileService.kt thành GlanceQuickTileService.kt.
 
-YAML
-    - assets/glance-favicon.png
-BƯỚC 2: THAY THẾ HÌNH TRÒN MÀU VÀNG TRÊN CÁC GIAO DIỆN YÊU CẦU
+Mở file vừa đổi, rename class GlanceTileService thành GlanceQuickTileService.
 
-Rà soát các file UI liên quan đến màn hình chính, thẻ trạng thái hoặc màn hình xin quyền thông báo (rà soát trong lib/features/dashboard/widgets/shield_status_card.dart, lib/features/permissions/screens/permission_screen.dart hoặc các widget hiển thị vòng tròn cảnh báo tương tự).
+Mở android/app/src/main/AndroidManifest.xml, tìm thẻ <service android:name=".GlanceTileService" và sửa thành <service android:name=".GlanceQuickTileService".
 
-Tìm cấu trúc mã nguồn đang vẽ một hình tròn màu vàng làm placeholder (thường dùng Container với BoxShape.circle và Colors.amber / Colors.yellow, hoặc một Icon cảnh báo màu vàng).
+Đảm bảo Manifest vẫn đang giữ thuộc tính android:icon="@drawable/ic_tile_vector_logo".
 
-Thay thế hình tròn/icon đó bằng cách hiển thị favicon trực tiếp từ tài nguyên: Image.asset('assets/glance-favicon.png', width: 32, height: 32) (điều chỉnh width/height cho cân đối, vừa vặn với kích thước của khối cũ).
+BƯỚC 2: VIẾT LẠI LOGIC TOGGLE BẰNG BỘ NHỚ LƯU TRỮ (DISK-BASED STATE)
 
-Hãy tuần tự sử dụng tool đọc file, phân tích cú pháp và dùng tool replace để ghi đè chính xác, giữ nguyên các logic xử lý sự kiện xung quanh.
+Mở GlanceQuickTileService.kt.
+
+Nguyên nhân lỗi trước đây: Logic onClick() bị phụ thuộc vào biến in-memory isRunning. Khi app bị kill, biến này reset gây liệt nút.
+
+Yêu cầu sửa lại onClick(): Xóa bỏ sự phụ thuộc vào isRunning. Khi click, BẮT BUỘC chạy luồng sau:
+
+Khởi tạo val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+
+Đọc state hiện tại: val currentlyActive = prefs.getBoolean("flutter.isActive", false)
+
+Đảo state: val newState = !currentlyActive
+
+Ghi đè ngay lập tức: prefs.edit().putBoolean("flutter.isActive", newState).apply()
+
+Routing:
+
+Nếu newState == true: Kích hoạt dịch vụ tương ứng (Standard hoặc Max) dựa trên flutter.protection_mode.
+
+Nếu newState == false: Bắn broadcast ACTION_STOP_SERVICE để tắt lá chắn.
+
+Gọi updateTileState().
+
+BƯỚC 3: CẬP NHẬT updateTileState() THEO Ổ CỨNG
+
+Trong updateTileState(), đọc lại biến flutter.isActive từ prefs thay vì dùng hàm isAnyServiceRunning().
+
+Dựa vào isActive đó để set Tile.STATE_ACTIVE / Tile.STATE_INACTIVE và đổi Subtitle tương ứng.
+
+Hãy tiến hành rename, refactor chuẩn xác và báo cáo.

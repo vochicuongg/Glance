@@ -152,12 +152,11 @@ class _AnimatedShieldIcon extends StatelessWidget {
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
         switchInCurve: Curves.easeOutBack,
-        child: Image.asset(
-          'assets/glance-favicon.png',
+        child: Icon(
+          Icons.shield_rounded,
           key: ValueKey('shield_$isActive'),
-          width: 48,
-          height: 48,
-          fit: BoxFit.contain,
+          color: Colors.amber,
+          size: 72,
         ),
       ),
     );
