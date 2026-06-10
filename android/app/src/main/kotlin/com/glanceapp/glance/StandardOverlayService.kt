@@ -83,9 +83,9 @@ class StandardOverlayService : Service(), SensorEventListener {
         const val EXTRA_AREA_WIDTH = "area_width"
         const val EXTRA_AREA_HEIGHT = "area_height"
 
-        private const val PREFS_NAME = "GlancePrefs"
-        private const val KEY_SENSITIVITY = "sensor_sensitivity"
-        private const val KEY_TOLERANCE = "sensor_tolerance"
+        private const val PREFS_NAME = "GlanceNativePrefs"
+        private const val KEY_SENSITIVITY = "sensitivity"
+        private const val KEY_TOLERANCE = "tolerance"
 
         // ── Notification constants ────────────────────────────────────────
         private const val NOTIF_CHANNEL_ID = "glance_standard_channel"
@@ -109,7 +109,7 @@ class StandardOverlayService : Service(), SensorEventListener {
 
     // ── Sensor configuration ──────────────────────────────────────────────
     private var sensorSensitivity: Float = 0.5f
-    private var sensorTolerance: Float = 0.2f
+    private var sensorTolerance: Float = 5.0f
 
     private var isOverlayShowing = false
     private var lastSensorStreamTime: Long = 0L
@@ -426,15 +426,19 @@ class StandardOverlayService : Service(), SensorEventListener {
         if (event == null || event.sensor.type != rotationSensor?.type) return
         if (!isRunning) return
 
-        // ── 1. Extract raw orientation from rotation vector ───────────────
+        // ── 1. Hybrid Sensor Engine ───────────────────────────────────────
         val rotationMatrix = FloatArray(9)
         SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
 
+        // 1a. Gamma (Roll) — restored from legacy getOrientation logic
         val orientationValues = FloatArray(3)
         SensorManager.getOrientation(rotationMatrix, orientationValues)
-
-        val rawPitchDeg = Math.toDegrees(orientationValues[1].toDouble()).toFloat()
         val rawRollDeg = Math.toDegrees(orientationValues[2].toDouble()).toFloat()
+
+        // 1b. Beta (Pitch) — gravity-vector method (anti-crosstalk)
+        val gY = rotationMatrix[5]
+        val gZ = rotationMatrix[8]
+        val rawPitchDeg = Math.toDegrees(Math.atan2(gY.toDouble(), gZ.toDouble())).toFloat()
 
         // ── 2. Baseline capture on first sample after calibration ─────────
         if (needsBaselineReset) {
@@ -451,8 +455,9 @@ class StandardOverlayService : Service(), SensorEventListener {
         broadcastSensorToFlutter(rawPitchDeg.toDouble(), relativeRoll.toDouble())
 
         // ── 4. Compute Target Alpha from tilt deviation ───────────────────
-        val toleranceThreshold = 15f + (sensorTolerance * 30f)
-        val maxAngleRange = 25f
+        // sensorTolerance is already in degrees (2°–40°) from Flutter slider
+        val toleranceThreshold = sensorTolerance
+        val maxAngleRange = 8f
 
         val targetAlpha: Float = if (absRoll > toleranceThreshold) {
             val deviation = absRoll - toleranceThreshold
@@ -462,20 +467,32 @@ class StandardOverlayService : Service(), SensorEventListener {
             0f
         }
 
-        // ── 5. EMA smoothing on alpha value (coefficient 0.8) ────────────
-        currentDisplayedAlpha += 0.8f * (targetAlpha - currentDisplayedAlpha)
+        // ── 5. Asymmetrical EMA smoothing (fast-attack / slow-release) ────
+        val emaCoefficient = if (targetAlpha > currentDisplayedAlpha) {
+            1.0f // No EMA delay — instant 100% curtain drop on tilt detection
+        } else {
+            0.15f // Slow release — smooth fade, no lingering
+        }
+        currentDisplayedAlpha += emaCoefficient * (targetAlpha - currentDisplayedAlpha)
 
-        // ── 6. UI decision: show/hide overlay based on smoothed alpha ─────
+        // ── 6. UI decision: show/hide overlay with hysteresis threshold ───
         if (currentDisplayedAlpha > 1f) {
             if (!isOverlayShowing) {
                 isOverlayShowing = true
                 createOverlayView()
             }
             applyAlphaToOverlay(currentDisplayedAlpha.toInt())
-        } else {
+        } else if (currentDisplayedAlpha < 0.1f) {
+            // Only remove view when alpha is near-zero (hysteresis buffer)
+            // This prevents rapid add/remove cycling at the boundary
             if (isOverlayShowing) {
                 isOverlayShowing = false
                 removeOverlayView()
+            }
+        } else {
+            // Alpha between 0.1 and 1.0 — keep view alive but fully transparent
+            if (isOverlayShowing) {
+                applyAlphaToOverlay(0)
             }
         }
     }
@@ -581,8 +598,8 @@ class StandardOverlayService : Service(), SensorEventListener {
     private fun loadSavedConfig() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         sensorSensitivity = prefs.getFloat(KEY_SENSITIVITY, 0.5f)
-        sensorTolerance = prefs.getFloat(KEY_TOLERANCE, 0.2f)
-        Log.d(TAG, "Config loaded — sensitivity=$sensorSensitivity, tolerance=$sensorTolerance")
+        sensorTolerance = prefs.getFloat(KEY_TOLERANCE, 5.0f)
+        Log.d(TAG, "Config loaded — sensitivity=$sensorSensitivity, tolerance=${sensorTolerance}°")
     }
 
     private fun notifyTileStateChanged() {

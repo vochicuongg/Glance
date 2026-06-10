@@ -1,41 +1,22 @@
-BƯỚC 1: ĐỔI TÊN TILE SERVICE ĐỂ TRIỆT TIÊU CACHE HỆ THỐNG
+BƯỚC 1: ĐỒNG BỘ ĐƯỜNG DẪN CONFIG VỀ FLUTTER SHAREDPREFERENCES
 
-Sử dụng tool đổi tên file: Đổi android/app/src/main/kotlin/com/glanceapp/glance/GlanceTileService.kt thành GlanceQuickTileService.kt.
+Mở StandardOverlayService.kt và MaxOverlayService.kt.
 
-Mở file vừa đổi, rename class GlanceTileService thành GlanceQuickTileService.
+Tìm hàm loadSavedConfig(). Thay thế việc đọc từ "GlancePrefs" thành đọc trực tiếp từ file SharedPreferences chung của Flutter để đồng bộ với MethodChannel:
 
-Mở android/app/src/main/AndroidManifest.xml, tìm thẻ <service android:name=".GlanceTileService" và sửa thành <service android:name=".GlanceQuickTileService".
+Kotlin
+val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+Sửa lại các key đọc dữ liệu: Sử dụng đúng key có tiền tố flutter. mà Flutter đang đồng bộ xuống qua hàm saveSettingsToNative (Kiểm tra và dùng chính xác key flutter.tolerance và flutter.sensitivity). Đảm bảo kiểu dữ liệu trả về khớp cấu trúc (gợi ý: dùng prefs.getFloat() hoặc chuyển đổi an toàn từ Double của Flutter).
 
-Đảm bảo Manifest vẫn đang giữ thuộc tính android:icon="@drawable/ic_tile_vector_logo".
+BƯỚC 2: ĐỒNG BỘ TOÁN HỌC TRONG onSensorChanged THEO ĐƠN VỊ ĐỘ (DEGREES)
 
-BƯỚC 2: VIẾT LẠI LOGIC TOGGLE BẰNG BỘ NHỚ LƯU TRỮ (DISK-BASED STATE)
+Vì giá trị tolerance truyền từ Flutter Slider sang là giá trị góc thực tế (từ 2° đến 40°).
 
-Mở GlanceQuickTileService.kt.
+Tại hàm onSensorChanged(), tìm dòng tính toán ngưỡng an toàn kích hoạt:
+val toleranceThreshold = 6f + (sensorTolerance * 12f) (hoặc tương đương).
 
-Nguyên nhân lỗi trước đây: Logic onClick() bị phụ thuộc vào biến in-memory isRunning. Khi app bị kill, biến này reset gây liệt nút.
+Sửa đổi: Gán trực tiếp toleranceThreshold bằng giá trị sensorTolerance vừa đọc được từ SharedPreferences. Điều này giúp người dùng kéo slider lên bao nhiêu độ thì vùng an toàn của lá chắn sẽ mở rộng ra đúng bấy nhiêu độ một cách trực quan và chính xác:
 
-Yêu cầu sửa lại onClick(): Xóa bỏ sự phụ thuộc vào isRunning. Khi click, BẮT BUỘC chạy luồng sau:
-
-Khởi tạo val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-
-Đọc state hiện tại: val currentlyActive = prefs.getBoolean("flutter.isActive", false)
-
-Đảo state: val newState = !currentlyActive
-
-Ghi đè ngay lập tức: prefs.edit().putBoolean("flutter.isActive", newState).apply()
-
-Routing:
-
-Nếu newState == true: Kích hoạt dịch vụ tương ứng (Standard hoặc Max) dựa trên flutter.protection_mode.
-
-Nếu newState == false: Bắn broadcast ACTION_STOP_SERVICE để tắt lá chắn.
-
-Gọi updateTileState().
-
-BƯỚC 3: CẬP NHẬT updateTileState() THEO Ổ CỨNG
-
-Trong updateTileState(), đọc lại biến flutter.isActive từ prefs thay vì dùng hàm isAnyServiceRunning().
-
-Dựa vào isActive đó để set Tile.STATE_ACTIVE / Tile.STATE_INACTIVE và đổi Subtitle tương ứng.
-
-Hãy tiến hành rename, refactor chuẩn xác và báo cáo.
+Kotlin
+val toleranceThreshold = sensorTolerance
+Hãy tiến hành rà soát kỹ lưỡng file tệp nguồn Native Kotlin, tiến hành vá code chuẩn xác và báo cáo ngắn gọn.
