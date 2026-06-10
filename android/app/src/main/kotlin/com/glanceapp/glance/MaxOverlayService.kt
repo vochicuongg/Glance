@@ -142,6 +142,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
     // ── Baseline calibration state ────────────────────────────────────────
     private var needsBaselineReset: Boolean = true
     private var baselineRoll: Float = 0f
+    private var baselinePitch: Float = 0f
 
     // ── EMA-smoothed alpha (directly controls overlay opacity) ────────────
     private var currentDisplayedAlpha: Float = 0f
@@ -196,6 +197,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                 ACTION_STOP_SERVICE -> {
                     isOverlayShowing = false
                     isRunning = false
+                    isCalibrated = false
                     removeOverlayView()
                     sensorManager?.unregisterListener(this@MaxOverlayService)
                     wakeLock?.let { if (it.isHeld) it.release() }
@@ -227,7 +229,9 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                 }
                 ACTION_RESUME_SERVICE -> {
                     loadSavedConfig()
-                    needsBaselineReset = true
+                    val autoCalibrate = intent?.getBooleanExtra("auto_calibrate", false) ?: false
+                    isCalibrated = autoCalibrate
+                    needsBaselineReset = autoCalibrate
                     removeOverlayView()
                     isOverlayShowing = false
 
@@ -351,38 +355,51 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
         val rotationMatrix = FloatArray(9)
         SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
 
-        // 1a. Gamma (Roll) — restored from legacy getOrientation logic
-        val orientationValues = FloatArray(3)
-        SensorManager.getOrientation(rotationMatrix, orientationValues)
-        val rawRollDeg = Math.toDegrees(orientationValues[2].toDouble()).toFloat()
-
-        // 1b. Beta (Pitch) — gravity-vector method (anti-crosstalk)
+        val gX = rotationMatrix[2]
         val gY = rotationMatrix[5]
         val gZ = rotationMatrix[8]
-        val rawPitchDeg = Math.toDegrees(Math.atan2(gY.toDouble(), gZ.toDouble())).toFloat()
 
-        // ── 2. Baseline capture on first sample after calibration ─────────
-        if (needsBaselineReset) {
-            baselineRoll = rawRollDeg
+        // Beta (Pitch) — asin(gY) to eliminate Gimbal Lock
+        val safeGy = gY.toDouble().coerceIn(-1.0, 1.0)
+        val rawPitchDeg = Math.toDegrees(Math.asin(safeGy)).toFloat()
+
+        // Gamma (Roll) — atan2(gX, gZ) for stable roll tracking
+        val rawRollDeg = Math.toDegrees(Math.atan2(gX.toDouble(), gZ.toDouble())).toFloat()
+
+        // ── 2. Stream sensor data to Flutter UI (always, even before calibration)
+        val displayRoll = if (isCalibrated) (rawRollDeg - baselineRoll) else rawRollDeg
+        broadcastSensorToFlutter(rawPitchDeg.toDouble(), displayRoll.toDouble())
+
+        // ── 3. If not calibrated, hide overlay and stop processing ────────
+        if (!isCalibrated) {
             currentDisplayedAlpha = 0f
-            needsBaselineReset = false
-            Log.d(TAG, "Baseline captured — roll=$rawRollDeg°")
+            if (isOverlayShowing) removeOverlayView()
+            return
         }
 
-        val relativeRoll = rawRollDeg - baselineRoll
-        val absRoll = Math.abs(relativeRoll)
+        // ── 4. Baseline capture on first sample after calibration ─────────
+        if (needsBaselineReset) {
+            baselineRoll = rawRollDeg
+            baselinePitch = rawPitchDeg
+            currentDisplayedAlpha = 0f
+            needsBaselineReset = false
+            Log.d(TAG, "Baseline captured — roll=$rawRollDeg°, pitch=$rawPitchDeg°")
+        }
 
-        // ── 3. Stream raw sensor data to Flutter UI ───────────────────────
-        broadcastSensorToFlutter(rawPitchDeg.toDouble(), relativeRoll.toDouble())
+        val absRoll = Math.abs(rawRollDeg - baselineRoll)
+        val absPitch = Math.abs(rawPitchDeg - baselinePitch)
 
         // ── 4. Compute Target Alpha from tilt deviation ───────────────────
+        // Lấy độ lệch lớn nhất giữa 2 trục (Gamma hoặc Beta) để áp dụng vùng an toàn
+        val maxDeviation = Math.max(absRoll, absPitch)
+
         // sensorTolerance is already in degrees (2°–40°) from Flutter slider
         val toleranceThreshold = sensorTolerance
-        val maxAngleRange = 8f
 
-        val targetAlpha: Float = if (absRoll > toleranceThreshold) {
-            val deviation = absRoll - toleranceThreshold
-            val ratio = (deviation / maxAngleRange).coerceIn(0f, 1f)
+        // Áp dụng chung toleranceThreshold cho maxDeviation
+        val targetAlpha: Float = if (maxDeviation > toleranceThreshold) {
+            val deviation = maxDeviation - toleranceThreshold
+            val ratio = (deviation / 8f).coerceIn(0f, 1f)
             ratio * MAX_ALPHA
         } else {
             0f
@@ -455,7 +472,8 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
                     PixelFormat.TRANSLUCENT
                 ).apply {
                     gravity = Gravity.TOP or Gravity.START

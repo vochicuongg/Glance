@@ -139,6 +139,7 @@ class GlanceQuickTileService : TileService() {
             // Start as foreground service with START_STANDARD_MODE action.
             val serviceIntent = Intent(this, StandardOverlayService::class.java).apply {
                 action = StandardOverlayService.ACTION_START_STANDARD_MODE
+                putExtra("auto_calibrate", true)
             }
             ContextCompat.startForegroundService(this, serviceIntent)
             Log.d(TAG, "Standard — startForegroundService(ACTION_START_STANDARD_MODE) sent via Tile")
@@ -163,6 +164,7 @@ class GlanceQuickTileService : TileService() {
 
                 sendBroadcast(Intent(MaxOverlayService.ACTION_RESUME_SERVICE).apply {
                     setPackage(packageName)
+                    putExtra("auto_calibrate", true)
                 })
                 Log.d(TAG, "Max — resume broadcast sent via Tile")
             } else {

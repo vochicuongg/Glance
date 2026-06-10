@@ -126,7 +126,7 @@ class ToleranceSliderCard extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  '$degrees°',
+                  '±$degrees°',
                   style: textTheme.labelLarge?.copyWith(
                     color: isEnabled
                         ? AppColors.accent(context)
