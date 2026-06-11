@@ -18,7 +18,6 @@ import android.provider.Settings
 import android.service.quicksettings.TileService
 import android.text.TextUtils
 import android.util.Log
-import android.view.Choreographer
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -145,27 +144,39 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
     private var baselineRoll: Float = 0f
     private var baselinePitch: Float = 0f
 
+    // ── Sensor LPF (Low-Pass Filter) for gravity vector noise suppression ─
+    private var filteredGx: Float = 0f
+    private var filteredGy: Float = 0f
+    private var filteredGz: Float = 0f
+    private val SENSOR_LPF_ALPHA: Float = 0.15f
+
     // ── VSYNC-driven interpolation target ─────────────────────────────────
     private var targetAlpha: Float = 0f
+    private var isAnimationRunning = false
 
     // ── EMA-smoothed alpha (directly controls overlay opacity) ────────────
     private var currentDisplayedAlpha: Float = 0f
 
-    private val frameCallback = object : Choreographer.FrameCallback {
-        override fun doFrame(frameTimeNanos: Long) {
-            if (isOverlayShowing) {
-                val diff = targetAlpha - currentDisplayedAlpha
-                if (Math.abs(diff) > 0.05f) { 
-                    // Attack nhanh (0.6f) sập rèm, Release êm (0.1f) tan rèm
-                    val emaCoefficient = if (targetAlpha > currentDisplayedAlpha) 0.6f else 0.1f
-                    currentDisplayedAlpha += emaCoefficient * diff
-                    applyAlphaToOverlay(currentDisplayedAlpha.toInt())
-                } else if (currentDisplayedAlpha != targetAlpha) {
-                    currentDisplayedAlpha = targetAlpha
-                    applyAlphaToOverlay(currentDisplayedAlpha.toInt())
-                }
+    private val vsyncRunnable = object : Runnable {
+        override fun run() {
+            if (!isOverlayShowing || overlayViews.isEmpty()) {
+                isAnimationRunning = false
+                return
             }
-            Choreographer.getInstance().postFrameCallback(this)
+            isAnimationRunning = true
+
+            val diff = targetAlpha - currentDisplayedAlpha
+            if (Math.abs(diff) > 0.05f) {
+                val emaCoefficient = if (targetAlpha > currentDisplayedAlpha) 0.6f else 0.1f
+                currentDisplayedAlpha += emaCoefficient * diff
+                applyAlphaToOverlay(currentDisplayedAlpha.toInt())
+            } else if (currentDisplayedAlpha != targetAlpha) {
+                currentDisplayedAlpha = targetAlpha
+                applyAlphaToOverlay(currentDisplayedAlpha.toInt())
+            }
+
+            // Móc trực tiếp vào VSYNC của WindowManager, sống độc lập với trạng thái Flutter
+            overlayViews[0].postOnAnimation(this)
         }
     }
 
@@ -186,7 +197,6 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                 ACTION_UPDATE_CONFIG -> {
                     sensorSensitivity = getSafeFloat(intent, EXTRA_SENSITIVITY, sensorSensitivity)
                     sensorTolerance = getSafeFloat(intent, EXTRA_TOLERANCE, sensorTolerance)
-                    if (isOverlayShowing) applyAlphaToOverlay(MAX_ALPHA)
                 }
                 ACTION_SET_SENSITIVITY -> sensorSensitivity = getSafeFloat(intent, EXTRA_SENSITIVITY, sensorSensitivity)
                 ACTION_SET_TOLERANCE -> sensorTolerance = getSafeFloat(intent, EXTRA_TOLERANCE, sensorTolerance)
@@ -377,16 +387,29 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
         val rotationMatrix = FloatArray(9)
         SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
 
-        val gX = rotationMatrix[2]
-        val gY = rotationMatrix[5]
-        val gZ = rotationMatrix[8]
+        // Bóc tách vector trọng lực thô (cột thứ 3 của ma trận xoay)
+        val rawGx = rotationMatrix[6]
+        val rawGy = rotationMatrix[7]
+        val rawGz = rotationMatrix[8]
 
-        // Beta (Pitch) — asin(gY) to eliminate Gimbal Lock
-        val safeGy = gY.toDouble().coerceIn(-1.0, 1.0)
-        val rawPitchDeg = Math.toDegrees(Math.asin(safeGy)).toFloat()
+        // ── LPF: Lọc nhiễu góc chéo bằng Exponential Moving Average ──────
+        if (filteredGx == 0f && filteredGy == 0f && filteredGz == 0f) {
+            // Frame đầu tiên: gán trực tiếp để không bị độ trễ khởi tạo
+            filteredGx = rawGx
+            filteredGy = rawGy
+            filteredGz = rawGz
+        } else {
+            filteredGx += SENSOR_LPF_ALPHA * (rawGx - filteredGx)
+            filteredGy += SENSOR_LPF_ALPHA * (rawGy - filteredGy)
+            filteredGz += SENSOR_LPF_ALPHA * (rawGz - filteredGz)
+        }
 
-        // Gamma (Roll) — atan2(gX, gZ) for stable roll tracking
-        val rawRollDeg = Math.toDegrees(Math.atan2(gX.toDouble(), gZ.toDouble())).toFloat()
+        // Trục Gamma (Roll): Dùng asin(filteredGx) để lấy góc nghiêng ngang tuyệt đối, không bị nhiễu bởi độ chúi của máy (Pitch)
+        val safeGx = filteredGx.toDouble().coerceIn(-1.0, 1.0)
+        val rawRollDeg = Math.toDegrees(Math.asin(safeGx)).toFloat()
+
+        // Trục Beta (Pitch): Dùng atan2(filteredGy, filteredGz) để đo độ chúi dọc ổn định
+        val rawPitchDeg = Math.toDegrees(Math.atan2(filteredGy.toDouble(), filteredGz.toDouble())).toFloat()
 
         // ── 2. Stream sensor data to Flutter UI (always, even before calibration)
         val displayRoll = if (isCalibrated) (rawRollDeg - baselineRoll) else rawRollDeg
@@ -416,8 +439,8 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
         val absPitch = Math.abs(rawPitchDeg - baselinePitch)
 
         // ── 4. Compute Target Alpha from tilt deviation ───────────────────
-        // Lấy độ lệch lớn nhất giữa 2 trục (Gamma hoặc Beta) để áp dụng vùng an toàn
-        val maxDeviation = Math.max(absRoll, absPitch)
+        // Tổng hợp vector chéo bằng định lý Pytago để tạo vùng an toàn hình tròn, triệt tiêu lỗi nhấp nháy
+        val maxDeviation = Math.hypot(absRoll.toDouble(), absPitch.toDouble()).toFloat()
 
         // sensorTolerance is already in degrees (2°–40°) from Flutter slider
         val toleranceThreshold = sensorTolerance
@@ -445,15 +468,12 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
     // ══════════════════════════════════════════════════════════════════════
 
     /**
-     * Applies the given alpha value directly to all overlay views.
-     * @param alpha Pre-computed EMA-smoothed alpha (0–MAX_ALPHA).
+     * Applies alpha value to all overlay views by setting background color.
      */
     private fun applyAlphaToOverlay(alpha: Int) {
         if (overlayViews.isEmpty()) return
-
         val safeAlpha = alpha.coerceIn(0, MAX_ALPHA)
-        val shieldColor = Color.argb(safeAlpha, 0, 0, 0)
-
+        val shieldColor = android.graphics.Color.argb(safeAlpha, 0, 0, 0)
         overlayViews.forEach { view ->
             view.setBackgroundColor(shieldColor)
         }
@@ -461,7 +481,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
 
     /**
      * Creates the overlay using TYPE_ACCESSIBILITY_OVERLAY (trusted window).
-     * Uses 2 layers (Dual Shield) for maximum darkness.
+     * Uses 2 layers (Dual Shield) with standard View background color.
      */
     private fun createOverlayView() {
         if (overlayViews.isNotEmpty()) return
@@ -483,7 +503,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                 }
 
                 val view = View(this).apply {
-                    setBackgroundColor(Color.argb(0, 0, 0, 0))
+                    setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
                     alpha = 1f
                     @Suppress("DEPRECATION")
                     systemUiVisibility = (
@@ -498,8 +518,10 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                 windowManager.addView(view, params)
                 overlayViews.add(view)
             }
-            Choreographer.getInstance().postFrameCallback(frameCallback)
-            Log.d(TAG, "Max Shield created — 2 layers, TYPE_ACCESSIBILITY_OVERLAY, maxAlpha=$MAX_ALPHA")
+            if (!isAnimationRunning && overlayViews.isNotEmpty()) {
+                overlayViews[0].postOnAnimation(vsyncRunnable)
+            }
+            Log.d(TAG, "Max Shield created — 2 layers, fullscreen alpha overlay, TYPE_ACCESSIBILITY_OVERLAY, maxAlpha=$MAX_ALPHA")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create Max Shield overlay: ${e.message}")
             removeOverlayView()
@@ -507,8 +529,9 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
     }
 
     private fun removeOverlayView() {
-        Choreographer.getInstance().removeFrameCallback(frameCallback)
+        isAnimationRunning = false
         overlayViews.forEach { view ->
+            view.removeCallbacks(vsyncRunnable)
             try {
                 windowManager.removeView(view)
             } catch (_: Exception) {}

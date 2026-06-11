@@ -1,75 +1,18 @@
-BƯỚC 1: IMPORT CHOREOGRAPHER VÀ KHAI BÁO BỘ NỘI SUY VSYNC
+BƯỚC 1: KHAI BÁO BIẾN LƯU TRỮ VECTOR LỌC NHIỄU
 
 Target: Cả 2 file StandardOverlayService.kt và MaxOverlayService.kt.
 
-Action 1: Thêm import import android.view.Choreographer ở đầu file.
+Hướng dẫn: Tại phần khai báo biến toàn cục của class, hãy thêm 3 biến private dạng Float để lưu trữ giá trị vector trọng lực đã lọc (filteredGx, filteredGy, filteredGz), khởi tạo là 0f. Khai báo thêm một hệ số lọc SENSOR_LPF_ALPHA = 0.15f (tương đương giữ lại 15% dữ liệu mới, lọc bỏ 85% nhiễu rác từ phần cứng).
 
-Action 2: Tại phần khai báo biến class (ngay trên private var currentDisplayedAlpha: Float = 0f), khai báo thêm biến mục tiêu và bộ Callback VSYNC:
+BƯỚC 2: TÍCH HỢP BỘ LỌC LPF TRƯỚC KHI TÍNH TOÁN LƯỢNG GIÁC
 
-Kotlin
-private var targetAlpha: Float = 0f
+Target: Hàm onSensorChanged() trong cả 2 file.
 
-private val frameCallback = object : Choreographer.FrameCallback {
-    override fun doFrame(frameTimeNanos: Long) {
-        if (isOverlayShowing) {
-            val diff = targetAlpha - currentDisplayedAlpha
-            if (Math.abs(diff) > 0.05f) { 
-                // Attack nhanh (0.6f) sập rèm, Release êm (0.1f) tan rèm
-                val emaCoefficient = if (targetAlpha > currentDisplayedAlpha) 0.6f else 0.1f
-                currentDisplayedAlpha += emaCoefficient * diff
-                applyAlphaToOverlay(currentDisplayedAlpha.toInt())
-            } else if (currentDisplayedAlpha != targetAlpha) {
-                currentDisplayedAlpha = targetAlpha
-                applyAlphaToOverlay(currentDisplayedAlpha.toInt())
-            }
-        }
-        Choreographer.getInstance().postFrameCallback(this)
-    }
-}
-BƯỚC 2: RÀNG BUỘC VÒNG ĐỜI VSYNC VÀO LÁ CHẮN
+Vấn đề cần giải quyết: Ở các tư thế nghiêng chéo gắt, giá trị trục Z tiến về 0 khiến phép chia trong hàm atan2 khuếch đại sai số phần cứng cực nhỏ thành dao động góc lớn, dẫn đến màn che bị nhấp nháy dù tay giữ yên.
 
-Target: Các hàm createOverlayView và removeOverlayView trong cả 2 file.
+Hướng dẫn thuật toán: 1. Trích xuất các giá trị thô rawGx, rawGy, rawGz từ đúng các chỉ mục của ma trận xoay (lần lượt là rotationMatrix[6], [7], [8]).
+2. Bắt mốc Frame đầu tiên: Nếu cả 3 biến filtered đang bằng 0f, hãy gán trực tiếp giá trị raw cho chúng để không bị độ trễ ở lần đọc đầu.
+3. Áp dụng LPF (Low-Pass Filter): Nội suy làm mượt vector trọng lực hiện tại bằng công thức Exponential Moving Average: filtered = filtered + SENSOR_LPF_ALPHA * (raw - filtered). Lặp lại cho cả 3 trục X, Y, Z.
+4. Đưa vào lượng giác: Thay vì dùng giá trị thô, hãy sử dụng các biến filteredGx (đã coerceIn(-1.0, 1.0)), filteredGy và filteredGz truyền vào các hàm Math.asin và Math.atan2 hiện tại để tính toán rawRollDeg và rawPitchDeg.
 
-Action 1: Cuối hàm createOverlayView(), ngay sau khi wm.addView() hoặc windowManager.addView() chạy xong thành công, đăng ký VSYNC:
-Choreographer.getInstance().postFrameCallback(frameCallback)
-
-Action 2: Trong hàm removeOverlayView(), ngay dòng đầu tiên trước khi chạy vòng lặp xóa view, hủy đăng ký VSYNC để chống rò rỉ bộ nhớ:
-Choreographer.getInstance().removeFrameCallback(frameCallback)
-
-BƯỚC 3: TÁCH RỜI RENDERING KHỎI SENSOR (TRIỆT TIÊU WINDOWMANAGER JANK)
-
-Target: Hàm onSensorChanged trong cả 2 file.
-
-Action 1: Tại đoạn code // ── 3. If not calibrated..., cập nhật lại để reset biến targetAlpha:
-
-Kotlin
-if (!isCalibrated) {
-    this.targetAlpha = 0f
-    currentDisplayedAlpha = 0f
-    if (isOverlayShowing) {
-        isOverlayShowing = false
-        removeOverlayView()
-    }
-    return
-}
-Action 2: Tìm đoạn code khai báo val targetAlpha: Float = ... (từ maxDeviation). Đổi tên biến cục bộ này bằng cách trỏ thẳng vào biến class:
-
-Kotlin
-this.targetAlpha = if (maxDeviation > toleranceThreshold) {
-    val deviation = maxDeviation - toleranceThreshold
-    val ratio = (deviation / 8f).coerceIn(0f, 1f)
-    ratio * MAX_ALPHA
-} else {
-    0f
-}
-Action 3: XÓA SẠCH toàn bộ các đoạn code từ // ── 5. Asymmetrical EMA smoothing cho đến hết hàm onSensorChanged (xóa các dòng liên quan đến biến emaCoefficient, cập nhật currentDisplayedAlpha, và các khối if/else gọi removeOverlayView).
-
-Action 4: Thay thế đoạn code vừa xóa bằng khối lệnh Persistent View siêu gọn nhẹ này:
-
-Kotlin
-// Persistent View: Chỉ tạo View duy nhất 1 lần khi vượt ngưỡng, VSYNC sẽ tự lo phần mờ/hiển thị
-if (!isOverlayShowing && this.targetAlpha > 0f) {
-    isOverlayShowing = true
-    createOverlayView()
-}
-Hãy rà soát cẩn thận source code và thực hiện vá code. Báo cáo ngắn gọn khi hoàn tất.
+Hãy phân tích kỹ luồng chạy, dùng công cụ để vá chính xác logic thuật toán này. Đảm bảo toàn bộ logic bên dưới (như công thức Math.hypot tính maxDeviation và VSYNC) được bảo toàn tuyệt đối. Báo cáo ngắn gọn khi hoàn thành.
