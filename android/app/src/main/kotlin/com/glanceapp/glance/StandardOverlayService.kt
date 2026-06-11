@@ -20,6 +20,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.service.quicksettings.TileService
 import android.util.Log
+import android.view.Choreographer
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -119,8 +120,29 @@ class StandardOverlayService : Service(), SensorEventListener {
     private var baselineRoll: Float = 0f
     private var baselinePitch: Float = 0f
 
+    // ── VSYNC-driven interpolation target ─────────────────────────────────
+    private var targetAlpha: Float = 0f
+
     // ── EMA-smoothed alpha (directly controls overlay opacity) ────────────
     private var currentDisplayedAlpha: Float = 0f
+
+    private val frameCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (isOverlayShowing) {
+                val diff = targetAlpha - currentDisplayedAlpha
+                if (Math.abs(diff) > 0.05f) { 
+                    // Attack nhanh (0.6f) sập rèm, Release êm (0.1f) tan rèm
+                    val emaCoefficient = if (targetAlpha > currentDisplayedAlpha) 0.6f else 0.1f
+                    currentDisplayedAlpha += emaCoefficient * diff
+                    applyAlphaToOverlay(currentDisplayedAlpha.toInt())
+                } else if (currentDisplayedAlpha != targetAlpha) {
+                    currentDisplayedAlpha = targetAlpha
+                    applyAlphaToOverlay(currentDisplayedAlpha.toInt())
+                }
+            }
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
 
     // ── Flag: receiver registered ─────────────────────────────────────────
     private var receiverRegistered = false
@@ -453,8 +475,12 @@ class StandardOverlayService : Service(), SensorEventListener {
 
         // ── 3. If not calibrated, hide overlay and stop processing ────────
         if (!isCalibrated) {
+            this.targetAlpha = 0f
             currentDisplayedAlpha = 0f
-            if (isOverlayShowing) removeOverlayView()
+            if (isOverlayShowing) {
+                isOverlayShowing = false
+                removeOverlayView()
+            }
             return
         }
 
@@ -478,7 +504,7 @@ class StandardOverlayService : Service(), SensorEventListener {
         val toleranceThreshold = sensorTolerance
 
         // Áp dụng chung toleranceThreshold cho maxDeviation
-        val targetAlpha: Float = if (maxDeviation > toleranceThreshold) {
+        this.targetAlpha = if (maxDeviation > toleranceThreshold) {
             val deviation = maxDeviation - toleranceThreshold
             val ratio = (deviation / 8f).coerceIn(0f, 1f)
             ratio * MAX_ALPHA
@@ -486,33 +512,10 @@ class StandardOverlayService : Service(), SensorEventListener {
             0f
         }
 
-        // ── 5. Asymmetrical EMA smoothing (fast-attack / slow-release) ────
-        val emaCoefficient = if (targetAlpha > currentDisplayedAlpha) {
-            1.0f // No EMA delay — instant 100% curtain drop on tilt detection
-        } else {
-            0.15f // Slow release — smooth fade, no lingering
-        }
-        currentDisplayedAlpha += emaCoefficient * (targetAlpha - currentDisplayedAlpha)
-
-        // ── 6. UI decision: show/hide overlay with hysteresis threshold ───
-        if (currentDisplayedAlpha > 1f) {
-            if (!isOverlayShowing) {
-                isOverlayShowing = true
-                createOverlayView()
-            }
-            applyAlphaToOverlay(currentDisplayedAlpha.toInt())
-        } else if (currentDisplayedAlpha < 0.1f) {
-            // Only remove view when alpha is near-zero (hysteresis buffer)
-            // This prevents rapid add/remove cycling at the boundary
-            if (isOverlayShowing) {
-                isOverlayShowing = false
-                removeOverlayView()
-            }
-        } else {
-            // Alpha between 0.1 and 1.0 — keep view alive but fully transparent
-            if (isOverlayShowing) {
-                applyAlphaToOverlay(0)
-            }
+        // Persistent View: Chỉ tạo View duy nhất 1 lần khi vượt ngưỡng, VSYNC sẽ tự lo phần mờ/hiển thị
+        if (!isOverlayShowing && this.targetAlpha > 0f) {
+            isOverlayShowing = true
+            createOverlayView()
         }
     }
 
@@ -576,6 +579,7 @@ class StandardOverlayService : Service(), SensorEventListener {
             }
             wm.addView(view, params)
             overlayViews.add(view)
+            Choreographer.getInstance().postFrameCallback(frameCallback)
 
             Log.d(TAG, "Standard Shield created — 1 layer, TYPE_APPLICATION_OVERLAY, maxAlpha=$MAX_ALPHA")
         } catch (e: Exception) {
@@ -585,6 +589,7 @@ class StandardOverlayService : Service(), SensorEventListener {
     }
 
     private fun removeOverlayView() {
+        Choreographer.getInstance().removeFrameCallback(frameCallback)
         val wm = windowManager ?: return
         overlayViews.forEach { view ->
             try {
