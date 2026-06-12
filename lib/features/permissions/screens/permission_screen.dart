@@ -120,17 +120,14 @@ class _PermissionScreenState extends State<PermissionScreen>
       _isLoading = false;
     });
 
-    // ── Mode-aware navigation guard ─────────────────────────────────────
-    if (_protectionMode == 'standard') {
-      // Standard mode: overlay and battery needed
-      if (_hasOverlay && _hasBattery) {
-        _navigateForward();
-      }
-    } else {
-      // Maximum mode: accessibility, overlay, and battery needed
-      if (_hasAccessibility && _hasOverlay && _hasBattery) {
-        _navigateForward();
-      }
+    // ── Dynamic missing-steps navigation guard ──────────────────────────
+    List<String> missing = [];
+    if (_protectionMode == 'maximum' && !_hasAccessibility) missing.add('accessibility');
+    if (!_hasOverlay) missing.add('overlay');
+    if (!_hasBattery) missing.add('battery');
+
+    if (missing.isEmpty) {
+      _navigateForward();
     }
   }
 
@@ -167,56 +164,32 @@ class _PermissionScreenState extends State<PermissionScreen>
       );
     }
 
-    // ── Determine which step to render ─────────────────────────────────────
-    final Widget stepContent;
+    // ── Dynamic missing-steps list ─────────────────────────────────────────
+    List<String> missingSteps = [];
+    if (_protectionMode == 'maximum' && !_hasAccessibility) missingSteps.add('accessibility');
+    if (!_hasOverlay) missingSteps.add('overlay');
+    if (!_hasBattery) missingSteps.add('battery');
 
-    if (_protectionMode == 'standard') {
-      // ── STANDARD MODE: 2 steps (Overlay → Battery) ──────────────────────
-      if (!_hasOverlay) {
+    // All permissions granted → show loading while navigating forward
+    if (missingSteps.isEmpty) {
+      return Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // ── Smart step numbering ───────────────────────────────────────────────
+    int totalSteps = _protectionMode == 'standard' ? 2 : 3;
+    int currentStep = totalSteps - missingSteps.length + 1;
+
+    // ── Render step based on first missing permission ──────────────────────
+    final Widget stepContent;
+    switch (missingSteps.first) {
+      case 'accessibility':
         stepContent = _PermissionStepView(
-          key: const ValueKey('step_overlay_standard'),
-          currentStep: 1,
-          totalSteps: 2,
-          icon: Icons.layers_rounded,
-          title: strings.permOverlayTitle,
-          description: strings.permOverlayDesc,
-          buttonText: strings.permOverlayButton,
-          refreshText: strings.permRefreshStatus,
-          onOpenSettings: () => GlanceChannelService.openOverlaySettings(),
-          onRefresh: _checkPermissions,
-          colorScheme: colorScheme,
-          theme: theme,
-          strings: strings,
-        );
-      } else {
-        stepContent = _PermissionStepView(
-          key: const ValueKey('step_battery_standard'),
-          currentStep: 2,
-          totalSteps: 2,
-          icon: Icons.battery_saver_rounded,
-          title: strings.batteryPermissionTitle,
-          description: '${strings.batteryPermissionDesc1}\n\n${strings.batteryPermissionDesc2}',
-          buttonText: strings.openBatterySettings,
-          buttonIcon: Icons.battery_saver_rounded,
-          refreshText: strings.permRefreshStatus,
-          onOpenSettings: () async {
-            await Permission.ignoreBatteryOptimizations.request();
-            _checkPermissions();
-          },
-          onRefresh: _checkPermissions,
-          colorScheme: colorScheme,
-          theme: theme,
-          strings: strings,
-        );
-      }
-    } else {
-      // ── MAXIMUM MODE: 3 steps (Accessibility → Overlay → Battery) ───────
-      if (!_hasAccessibility) {
-        // Step 1: Accessibility
-        stepContent = _PermissionStepView(
-          key: const ValueKey('step_accessibility'),
-          currentStep: 1,
-          totalSteps: 3,
+          key: const ValueKey('step_acc'),
+          currentStep: currentStep,
+          totalSteps: totalSteps,
           icon: Icons.accessibility_new_rounded,
           title: strings.permAccessibilityTitle,
           description: strings.permAccessibilityDesc,
@@ -230,12 +203,12 @@ class _PermissionScreenState extends State<PermissionScreen>
           strings: strings,
           showRestrictedSettingsHelp: true,
         );
-      } else if (!_hasOverlay) {
-        // Step 2: Overlay
+        break;
+      case 'overlay':
         stepContent = _PermissionStepView(
           key: const ValueKey('step_overlay'),
-          currentStep: 2,
-          totalSteps: 3,
+          currentStep: currentStep,
+          totalSteps: totalSteps,
           icon: Icons.layers_rounded,
           title: strings.permOverlayTitle,
           description: strings.permOverlayDesc,
@@ -247,13 +220,14 @@ class _PermissionScreenState extends State<PermissionScreen>
           theme: theme,
           strings: strings,
         );
-      } else {
-        // Step 3: Battery
+        break;
+      case 'battery':
+      default:
         stepContent = _PermissionStepView(
           key: const ValueKey('step_battery'),
-          currentStep: 3,
-          totalSteps: 3,
-          icon: Icons.battery_saver_rounded,
+          currentStep: currentStep,
+          totalSteps: totalSteps,
+          icon: Icons.battery_alert_rounded,
           title: strings.batteryPermissionTitle,
           description: '${strings.batteryPermissionDesc1}\n\n${strings.batteryPermissionDesc2}',
           buttonText: strings.openBatterySettings,
@@ -268,7 +242,7 @@ class _PermissionScreenState extends State<PermissionScreen>
           theme: theme,
           strings: strings,
         );
-      }
+        break;
     }
 
     return PopScope(
@@ -320,13 +294,13 @@ class _PermissionScreenState extends State<PermissionScreen>
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) {
-              // Combine fade + subtle slide-up for a polished transition
+              // Combine fade + horizontal slide (right-to-left) for a polished transition
               return FadeTransition(
                 opacity: animation,
                 child: SlideTransition(
                   position:
                       Tween<Offset>(
-                        begin: const Offset(0.0, 0.08),
+                        begin: const Offset(0.15, 0.0),
                         end: Offset.zero,
                       ).animate(
                         CurvedAnimation(
