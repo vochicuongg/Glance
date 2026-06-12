@@ -1,25 +1,45 @@
-BƯỚC 1: BỔ SUNG CALLBACK VÀ BIỂU TƯỢNG DROPDOWN CHO SHIELD STATUS CARD
+BƯỚC 1: CẤP QUYỀN PACKAGE VISIBILITY TRONG ANDROID MANIFEST
 
-Target: lib/features/dashboard/widgets/shield_status_card.dart
+Target: android/app/src/main/AndroidManifest.xml
 
-Action:
+Vấn đề: Từ Android 11, canLaunchUrl sẽ return false nếu không có thẻ <queries>.
 
-Bổ sung tham số final VoidCallback onModeTap; vào class ShieldStatusCard và constructor của nó.
+Action: Mở file Manifest, thêm khối lệnh <queries> sau đây vào ngay phía trên thẻ <application> (cùng cấp với các thẻ <uses-permission>):
 
-Tại hàm build của ShieldStatusCard, truyền tham số onModeTap: onModeTap xuống widget con _ModeLabel. (Nhớ cập nhật cả constructor của _ModeLabel để nhận hàm này).
+XML
+<queries>
+    <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="https" />
+    </intent>
+    <intent>
+        <action android:name="android.intent.action.SENDTO" />
+        <data android:scheme="mailto" />
+    </intent>
+</queries>
 
-Trong hàm build của _ModeLabel, hãy bọc AnimatedDefaultTextStyle (hoặc widget nội dung) vào một GestureDetector (hoặc InkWell với borderRadius) và gắn onTap: onModeTap.
+**BƯỚC 2: TỐI ƯU HÀM LAUNCH URL TRONG DART**
+* **Target:** `lib/features/dashboard/widgets/about_app_sheet.dart`
+* **Action:** Sửa lại logic `onTap` của Website, GitHub và Email. 
+  - Đừng phụ thuộc vào `if (await canLaunchUrl(url))`. 
+  - Hãy gọi trực tiếp `await launchUrl(url, mode: LaunchMode.externalApplication);` bọc trong `try-catch`. Nếu là `mailto` thì không cần tham số `mode`.
 
-Đổi nội dung bên trong từ một Text đơn thuần thành một Row (có mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center). Bên trong Row chứa Text hiện tại, một SizedBox(width: 4), và một icon mũi tên xuống (Icon(Icons.keyboard_arrow_down_rounded)). Căn chỉnh màu sắc và độ mờ của mũi tên cho đồng bộ với chữ (Vàng accent nếu đang active, Xám tertiary nếu đang tắt).
+**BƯỚC 3: THÊM TÍNH NĂNG ZOOM MÃ QR (DIALOG POPUP)**
+* **Target:** `lib/features/dashboard/widgets/about_app_sheet.dart`
+* **Action:** 
+  1. Tìm các widget `Image.asset(...)` hiển thị QR Code của MBBank và ZaloPay.
+  2. Bọc mỗi ảnh QR bằng một `GestureDetector` hoặc `InkWell`.
+  3. Viết một hàm private `_showZoomedQR(BuildContext context, String imagePath, String title, String subtitle)`. Hàm này sẽ gọi `showDialog` với giao diện:
+     - Dùng `Dialog` có `backgroundColor: Colors.transparent` và `insetPadding: EdgeInsets.all(16)`.
+     - Bên trong là một `Container` bo góc, nền màu Dark Charcoal viền Gold nhạt (Glassmorphism style).
+     - Bố cục từ trên xuống: 
+       + Nút đóng (X) góc trên bên phải.
+       + Hình ảnh QR Code (kích thước lớn, bo góc).
+       + Khoảng trống nhỏ (SizedBox).
+       + Text Title (VD: "MBBank" hoặc "ZaloPay") - màu Gold, in đậm.
+       + Text Subtitle (VD: "078604112004 - VO CHI CUONG") - màu Trắng.
+       + Nút Copy (Sao chép) ngay bên dưới để người dùng có thể copy luôn từ popup.
+  4. Gắn hàm `_showZoomedQR` vào sự kiện `onTap` của 2 mã QR với các tham số tương ứng.
 
-BƯỚC 2: KẾT NỐI TỪ DASHBOARD SCREEN
-
-Target: lib/features/dashboard/screens/dashboard_screen.dart
-
-Action:
-
-Tìm vị trí gọi widget ShieldStatusCard(...) bên trong hàm build của DashboardScreen.
-
-Bổ sung tham số onModeTap và trỏ nó vào hàm Bottom Sheet đã có sẵn: onModeTap: _showModeSelectionMenu,.
-
-Hãy rà soát kỹ cấu trúc cây UI để đảm bảo layout giữ nguyên căn giữa (center alignment), mũi tên xuống hiển thị mượt mà và không bị lỗi tràn viền. Báo cáo ngắn gọn khi hoàn tất.
+Hãy phân tích cẩn thận, đặc biệt là vị trí chèn `<queries>` trong file XML phải chuẩn xác. Trả về báo cáo sau khi hoàn tất.

@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../permissions/screens/permission_screen.dart';
 import '../widgets/language_selector_card.dart';
+import '../widgets/about_app_sheet.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
 /// Settings Screen
@@ -241,9 +242,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // ── Language Selector ──────────────────────────────────────────
             const LanguageSelectorCard(),
 
+            const SizedBox(height: 16),
+
+            // ── About App Card ─────────────────────────────────────────────
+            _buildAboutAppCard(context, strings),
+
             const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Builds a card with a ListTile to show the About App bottom sheet.
+  Widget _buildAboutAppCard(BuildContext context, LocalizedStrings strings) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        leading: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.gold.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            Icons.info_outline_rounded,
+            size: 18,
+            color: AppColors.gold,
+          ),
+        ),
+        title: Text(
+          strings.aboutApp,
+          style: TextStyle(
+            color: AppColors.textPrimaryC(context),
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
+        trailing: Icon(
+          Icons.chevron_right_rounded,
+          color: AppColors.textSecondaryC(context),
+          size: 20,
+        ),
+        onTap: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => const AboutAppSheet(),
+          );
+        },
       ),
     );
   }

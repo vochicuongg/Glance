@@ -167,6 +167,14 @@ class LocalizedStrings {
   final String permRefreshStatus;
   final String permGrantRequired;
 
+  // About App
+  final String aboutApp;
+  final String appVersion;
+  final String developer;
+  final String supportDev;
+  final String copySuccess;
+  final String copyButton;
+
   const LocalizedStrings({
     required this.protectionActive,
     required this.protectionDisabled,
@@ -255,6 +263,12 @@ class LocalizedStrings {
     required this.permStepOf,
     required this.permRefreshStatus,
     required this.permGrantRequired,
+    required this.aboutApp,
+    required this.appVersion,
+    required this.developer,
+    required this.supportDev,
+    required this.copySuccess,
+    required this.copyButton,
   });
 }
 
@@ -407,6 +421,14 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     permStepOf: 'Step %d of %d',
     permRefreshStatus: 'Already enabled? Continue',
     permGrantRequired: 'Please grant all permissions to use this feature.',
+
+    // About App
+    aboutApp: 'About Glance',
+    appVersion: 'Version 1.0',
+    developer: 'Developer',
+    supportDev: 'Buy me a coffee ☕',
+    copySuccess: 'Account number copied!',
+    copyButton: 'Copy',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -550,6 +572,14 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     permStepOf: 'Bước %d / %d',
     permRefreshStatus: 'Đã bật? Tiếp tục',
     permGrantRequired: 'Vui lòng cấp đủ quyền để sử dụng tính năng.',
+
+    // About App
+    aboutApp: 'Thông tin ứng dụng',
+    appVersion: 'Phiên bản 1.0',
+    developer: 'Nhà phát triển',
+    supportDev: 'Tiếp thêm động lực ☕',
+    copySuccess: 'Đã sao chép số tài khoản!',
+    copyButton: 'Sao chép',
   ),
 };
 
