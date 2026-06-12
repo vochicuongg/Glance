@@ -41,15 +41,15 @@ class SensitivitySliderCard extends StatelessWidget {
 
   /// Returns a human-friendly label for the current sensitivity level.
   String _sensitivityLabel(LocalizedStrings s) {
-    if (value < 0.33) return s.sensitivityLow;
-    if (value < 0.66) return s.sensitivityMedium;
+    if (value <= 0.3) return s.sensitivityLow;
+    if (value <= 0.7) return s.sensitivityMedium;
     return s.sensitivityHigh;
   }
 
   /// Returns a description for the current sensitivity level.
   String _sensitivityDescription(LocalizedStrings s) {
-    if (value < 0.33) return s.sensitivityDescLow;
-    if (value < 0.66) return s.sensitivityDescMedium;
+    if (value <= 0.3) return s.sensitivityDescLow;
+    if (value <= 0.7) return s.sensitivityDescMedium;
     return s.sensitivityDescHigh;
   }
 
@@ -202,6 +202,31 @@ class SensitivitySliderCard extends StatelessWidget {
                 height: 1.4,
               ),
             ),
+          ),
+
+          // ── Bottom Info Row (Instant Protection) ─────────────────────────
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(
+                Icons.flash_on_rounded,
+                size: 14,
+                color: isEnabled
+                    ? AppColors.accent(context).withValues(alpha: 0.8)
+                    : AppColors.textTertiaryC(context),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                strings.instantProtectionLabel,
+                style: textTheme.bodySmall?.copyWith(
+                  color: isEnabled
+                      ? AppColors.textSecondaryC(context)
+                      : AppColors.textTertiaryC(context),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ],
       ),

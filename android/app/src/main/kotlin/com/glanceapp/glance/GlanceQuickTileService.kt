@@ -203,19 +203,19 @@ class GlanceQuickTileService : TileService() {
 
         // ── Determine subtitle ──────────────────────────────────────────────
         val modeSubtitle = if (isActive) {
-            if (mode == "standard") "Tiêu chuẩn" else "Tối đa"
+            if (mode == "standard") getString(R.string.tile_status_standard) else getString(R.string.tile_status_maximum)
         } else {
-            "Đã tắt"
+            getString(R.string.tile_status_off)
         }
 
         // ── Update tile visual state ────────────────────────────────────────
         if (isActive) {
             tile.state = Tile.STATE_ACTIVE
-            tile.label = "Glance"
+            tile.label = getString(R.string.tile_label)
             tile.contentDescription = "Glance privacy shield is active"
         } else {
             tile.state = Tile.STATE_INACTIVE
-            tile.label = "Glance"
+            tile.label = getString(R.string.tile_label)
             tile.contentDescription = "Glance privacy shield is inactive"
         }
 

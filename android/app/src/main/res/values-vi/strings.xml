@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_label">Glance</string>
+    <string name="tile_status_active">Hoạt động</string>
+    <string name="tile_status_off">Tắt</string>
+    <string name="tile_status_standard">Tiêu chuẩn</string>
+    <string name="tile_status_maximum">Tối đa</string>
+</resources>

@@ -1,18 +1,25 @@
-BƯỚC 1: KHAI BÁO BIẾN LƯU TRỮ VECTOR LỌC NHIỄU
+BƯỚC 1: BỔ SUNG CALLBACK VÀ BIỂU TƯỢNG DROPDOWN CHO SHIELD STATUS CARD
 
-Target: Cả 2 file StandardOverlayService.kt và MaxOverlayService.kt.
+Target: lib/features/dashboard/widgets/shield_status_card.dart
 
-Hướng dẫn: Tại phần khai báo biến toàn cục của class, hãy thêm 3 biến private dạng Float để lưu trữ giá trị vector trọng lực đã lọc (filteredGx, filteredGy, filteredGz), khởi tạo là 0f. Khai báo thêm một hệ số lọc SENSOR_LPF_ALPHA = 0.15f (tương đương giữ lại 15% dữ liệu mới, lọc bỏ 85% nhiễu rác từ phần cứng).
+Action:
 
-BƯỚC 2: TÍCH HỢP BỘ LỌC LPF TRƯỚC KHI TÍNH TOÁN LƯỢNG GIÁC
+Bổ sung tham số final VoidCallback onModeTap; vào class ShieldStatusCard và constructor của nó.
 
-Target: Hàm onSensorChanged() trong cả 2 file.
+Tại hàm build của ShieldStatusCard, truyền tham số onModeTap: onModeTap xuống widget con _ModeLabel. (Nhớ cập nhật cả constructor của _ModeLabel để nhận hàm này).
 
-Vấn đề cần giải quyết: Ở các tư thế nghiêng chéo gắt, giá trị trục Z tiến về 0 khiến phép chia trong hàm atan2 khuếch đại sai số phần cứng cực nhỏ thành dao động góc lớn, dẫn đến màn che bị nhấp nháy dù tay giữ yên.
+Trong hàm build của _ModeLabel, hãy bọc AnimatedDefaultTextStyle (hoặc widget nội dung) vào một GestureDetector (hoặc InkWell với borderRadius) và gắn onTap: onModeTap.
 
-Hướng dẫn thuật toán: 1. Trích xuất các giá trị thô rawGx, rawGy, rawGz từ đúng các chỉ mục của ma trận xoay (lần lượt là rotationMatrix[6], [7], [8]).
-2. Bắt mốc Frame đầu tiên: Nếu cả 3 biến filtered đang bằng 0f, hãy gán trực tiếp giá trị raw cho chúng để không bị độ trễ ở lần đọc đầu.
-3. Áp dụng LPF (Low-Pass Filter): Nội suy làm mượt vector trọng lực hiện tại bằng công thức Exponential Moving Average: filtered = filtered + SENSOR_LPF_ALPHA * (raw - filtered). Lặp lại cho cả 3 trục X, Y, Z.
-4. Đưa vào lượng giác: Thay vì dùng giá trị thô, hãy sử dụng các biến filteredGx (đã coerceIn(-1.0, 1.0)), filteredGy và filteredGz truyền vào các hàm Math.asin và Math.atan2 hiện tại để tính toán rawRollDeg và rawPitchDeg.
+Đổi nội dung bên trong từ một Text đơn thuần thành một Row (có mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center). Bên trong Row chứa Text hiện tại, một SizedBox(width: 4), và một icon mũi tên xuống (Icon(Icons.keyboard_arrow_down_rounded)). Căn chỉnh màu sắc và độ mờ của mũi tên cho đồng bộ với chữ (Vàng accent nếu đang active, Xám tertiary nếu đang tắt).
 
-Hãy phân tích kỹ luồng chạy, dùng công cụ để vá chính xác logic thuật toán này. Đảm bảo toàn bộ logic bên dưới (như công thức Math.hypot tính maxDeviation và VSYNC) được bảo toàn tuyệt đối. Báo cáo ngắn gọn khi hoàn thành.
+BƯỚC 2: KẾT NỐI TỪ DASHBOARD SCREEN
+
+Target: lib/features/dashboard/screens/dashboard_screen.dart
+
+Action:
+
+Tìm vị trí gọi widget ShieldStatusCard(...) bên trong hàm build của DashboardScreen.
+
+Bổ sung tham số onModeTap và trỏ nó vào hàm Bottom Sheet đã có sẵn: onModeTap: _showModeSelectionMenu,.
+
+Hãy rà soát kỹ cấu trúc cây UI để đảm bảo layout giữ nguyên căn giữa (center alignment), mũi tên xuống hiển thị mượt mà và không bị lỗi tràn viền. Báo cáo ngắn gọn khi hoàn tất.

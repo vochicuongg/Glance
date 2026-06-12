@@ -52,7 +52,7 @@ class ToleranceSliderCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final strings = LocaleProvider.stringsOf(context);
     final isEnabled = isServiceActive;
-    final degrees = value.round();
+    final degrees = value.toStringAsFixed(0);
 
     return Container(
       width: double.infinity,
@@ -184,6 +184,31 @@ class ToleranceSliderCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+
+          // ── Bottom Info Row (Flicker Guard) ─────────────────────────────
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(
+                Icons.gpp_good_rounded,
+                size: 14,
+                color: isEnabled
+                    ? AppColors.accent(context).withValues(alpha: 0.8)
+                    : AppColors.textTertiaryC(context),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                strings.flickerGuardLabel,
+                style: textTheme.bodySmall?.copyWith(
+                  color: isEnabled
+                      ? AppColors.textSecondaryC(context)
+                      : AppColors.textTertiaryC(context),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ],
       ),

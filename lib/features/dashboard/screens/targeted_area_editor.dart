@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/localization/locale_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/glance_channel_service.dart';
 
@@ -264,9 +265,9 @@ class _TargetedAreaEditorState extends State<TargetedAreaEditor>
         // Show success feedback then pop back
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text(
-              'Protected area saved',
-              style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+            content: Text(
+              LocaleProvider.stringsOf(context).protectedAreaSaved,
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
             ),
             backgroundColor: AppColors.darkCharcoal,
             behavior: SnackBarBehavior.floating,
@@ -306,6 +307,8 @@ class _TargetedAreaEditorState extends State<TargetedAreaEditor>
 
   @override
   Widget build(BuildContext context) {
+    final strings = LocaleProvider.stringsOf(context);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: FadeTransition(
@@ -351,7 +354,7 @@ class _TargetedAreaEditorState extends State<TargetedAreaEditor>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Drag to move',
+                            strings.dragToMove,
                             style: TextStyle(
                               color: AppColors.gold.withValues(alpha: 0.5),
                               fontSize: 11,
@@ -420,10 +423,10 @@ class _TargetedAreaEditorState extends State<TargetedAreaEditor>
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Define Protected Area',
-                          style: TextStyle(
+                          strings.defineProtectedArea,
+                          style: const TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -505,7 +508,7 @@ class _TargetedAreaEditorState extends State<TargetedAreaEditor>
                                 )
                               : const Icon(Icons.check_rounded, size: 20),
                           label: Text(
-                            _isSaving ? 'Saving...' : 'Apply Protected Area',
+                            _isSaving ? strings.saving : strings.applyProtectedArea,
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,

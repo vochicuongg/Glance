@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -693,8 +694,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   // 1. Shield Status Card (hero)
                   ShieldStatusCard(
                     isActive: _isServiceActive,
+                    isCalibrated: _isCalibrated,
                     protectionMode: _protectionMode,
                     onToggle: _handleToggleService,
+                    onModeTap: _showModeSelectionMenu,
                   ),
 
                   const SizedBox(height: 16),
@@ -776,24 +779,35 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
 
                   const SizedBox(height: 16),
-
-                  // 5. Calibrate Card (Viewing Angle) — BELOW coverage
-                  CalibrateCard(
-                    isServiceActive: _isServiceActive,
-                    isCalibrated: _isCalibrated,
-                    onCalibrate: _handleCalibrate,
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // 6. Footer
-                  _buildFooter(context),
-
-                  const SizedBox(height: 24),
                 ]),
               ),
             ),
           ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: SafeArea(
+              top: false,
+              child: CalibrateCard(
+                isServiceActive: _isServiceActive,
+                isCalibrated: _isCalibrated,
+                onCalibrate: _handleCalibrate,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -904,31 +918,31 @@ class _DashboardScreenState extends State<DashboardScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              label,
+              label.toUpperCase(),
               style: TextStyle(
-                color: AppColors.textSecondaryC(context),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.3,
+                color: AppColors.textTertiaryC(context),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
               ),
             ),
             Text(
               '${degrees > 0 ? '+' : ''}${degrees.toStringAsFixed(1)}°',
               style: TextStyle(
-                color: AppColors.gold.withValues(alpha: 0.8),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+                color: AppColors.gold.withValues(alpha: 0.9),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
                 fontFamily: 'monospace',
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         ClipRRect(
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: BorderRadius.circular(2),
           child: Container(
-            height: 6,
+            height: 3,
             width: double.infinity,
             color: AppColors.surface(context),
             child: LayoutBuilder(
@@ -948,7 +962,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       top: 0,
                       bottom: 0,
                       width: 1,
-                      child: Container(color: AppColors.border(context)),
+                      child: Container(color: AppColors.border(context).withValues(alpha: 0.5)),
                     ),
                     // Animated Gold Bar
                     AnimatedPositioned(
@@ -960,8 +974,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                       width: barWidth,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppColors.gold.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(3),
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.gold,
+                              AppColors.gold.withValues(alpha: 0.7),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
@@ -975,35 +994,4 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  /// A subtle footer with app info.
-  Widget _buildFooter(BuildContext context) {
-    final strings = LocaleProvider.stringsOf(context);
-    return Column(
-      children: [
-        Divider(
-          color: AppColors.border(context).withValues(alpha: 0.5),
-          height: 1,
-        ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.lock_outline_rounded,
-              size: 14,
-              color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              strings.footerText,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textTertiaryC(context).withValues(alpha: 0.6),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
 }

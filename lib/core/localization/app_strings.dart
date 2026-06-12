@@ -71,6 +71,7 @@ class LocalizedStrings {
   final String sensitivityDescHigh;
   final String relaxed;
   final String strict;
+  final String instantProtectionLabel;
 
   // ── Calibrate Card ──────────────────────────────────────────────────
   final String viewingAngle;
@@ -87,6 +88,7 @@ class LocalizedStrings {
   final String coverageModeSubtitle;
   final String fullScreen;
   final String targeted;
+  final String fullScreenDescription;
   final String targetedDescription;
   final String defineProtectedArea;
 
@@ -127,6 +129,7 @@ class LocalizedStrings {
   final String toleranceSubtitle;
   final String toleranceNarrow;
   final String toleranceWide;
+  final String flickerGuardLabel;
 
   // ── Theme ─────────────────────────────────────────────────────────────
   final String theme;
@@ -141,6 +144,17 @@ class LocalizedStrings {
 
   // ── UX Warning (Overlay Touch / Clickjacking) ──────────────────────
   final String overlayTouchWarning;
+
+  // ── Added Keys for Dashboard and Children ──────────────────────────
+  final String shieldActive;
+  final String shieldOff;
+  final String tapToPause;
+  final String tapToActivate;
+  final String activateToCalibrate;
+  final String dragToMove;
+  final String saving;
+  final String applyProtectedArea;
+  final String protectedAreaSaved;
 
   // ── Permission / Onboarding Screen (Gatekeeper) ────────────────────
   final String permAccessibilityTitle;
@@ -170,6 +184,7 @@ class LocalizedStrings {
     required this.sensitivityDescHigh,
     required this.relaxed,
     required this.strict,
+    required this.instantProtectionLabel,
     required this.viewingAngle,
     required this.viewingAngleSubtitle,
     required this.calibrationSet,
@@ -182,6 +197,7 @@ class LocalizedStrings {
     required this.coverageModeSubtitle,
     required this.fullScreen,
     required this.targeted,
+    required this.fullScreenDescription,
     required this.targetedDescription,
     required this.defineProtectedArea,
     required this.permissionRequired,
@@ -212,6 +228,7 @@ class LocalizedStrings {
     required this.toleranceSubtitle,
     required this.toleranceNarrow,
     required this.toleranceWide,
+    required this.flickerGuardLabel,
     required this.theme,
     required this.themeSubtitle,
     required this.systemMode,
@@ -220,6 +237,15 @@ class LocalizedStrings {
     required this.notificationTitle,
     required this.notificationText,
     required this.overlayTouchWarning,
+    required this.shieldActive,
+    required this.shieldOff,
+    required this.tapToPause,
+    required this.tapToActivate,
+    required this.activateToCalibrate,
+    required this.dragToMove,
+    required this.saving,
+    required this.applyProtectedArea,
+    required this.protectedAreaSaved,
     required this.permAccessibilityTitle,
     required this.permAccessibilityDesc,
     required this.permAccessibilityButton,
@@ -262,6 +288,7 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     sensitivityDescHigh: 'Reacts to the slightest tilt for maximum privacy',
     relaxed: 'Relaxed',
     strict: 'Strict',
+    instantProtectionLabel: 'Instant protection',
 
     // Calibrate
     viewingAngle: 'Viewing Angle',
@@ -281,6 +308,7 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     coverageModeSubtitle: 'Choose what to protect',
     fullScreen: 'Full Screen',
     targeted: 'Targeted',
+    fullScreenDescription: 'Secure the entire visible display area',
     targetedDescription:
         'Draw a rectangle on your screen to define the area '
         'you want to protect. Only that zone will be obscured '
@@ -330,6 +358,7 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     toleranceSubtitle: 'Dead zone to prevent boundary flicker',
     toleranceNarrow: 'Narrow',
     toleranceWide: 'Wide',
+    flickerGuardLabel: 'Flicker Guard',
 
     // Theme
     theme: 'Appearance',
@@ -348,6 +377,17 @@ const Map<AppLocale, LocalizedStrings> _strings = {
         'touch on apps like Google Play or Banking. Please quickly '
         'toggle it off via the notification bar (Quick Settings) '
         'when needed.',
+
+    // Added Keys for Dashboard and Children
+    shieldActive: 'ACTIVE',
+    shieldOff: 'OFF',
+    tapToPause: 'Tap shield to pause security',
+    tapToActivate: 'Tap shield to activate security',
+    activateToCalibrate: 'ACTIVATE SERVICE TO CALIBRATE',
+    dragToMove: 'Drag to move',
+    saving: 'Saving...',
+    applyProtectedArea: 'Apply Protected Area',
+    protectedAreaSaved: 'Protected area saved',
 
     // Permission / Onboarding Screen (Gatekeeper)
     permAccessibilityTitle: 'Enable Accessibility Service',
@@ -392,6 +432,7 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     sensitivityDescHigh: 'Phản ứng với nghiêng nhỏ nhất, bảo mật tối đa',
     relaxed: 'Thoải mái',
     strict: 'Nghiêm ngặt',
+    instantProtectionLabel: 'Bảo vệ tức thì',
 
     // Hiệu chỉnh góc
     viewingAngle: 'Góc nhìn',
@@ -411,6 +452,7 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     coverageModeSubtitle: 'Chọn khu vực cần bảo mật',
     fullScreen: 'Toàn màn hình',
     targeted: 'Vùng tùy chỉnh',
+    fullScreenDescription: 'Bảo mật toàn bộ không gian hiển thị',
     targetedDescription:
         'Vẽ một khung chữ nhật trên màn hình để xác định vùng '
         'cần bảo vệ. Chỉ khu vực đó sẽ được che mờ khi '
@@ -459,6 +501,7 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     toleranceSubtitle: 'Vùng trễ chống nhấp nháy ở ranh giới',
     toleranceNarrow: 'Hẹp',
     toleranceWide: 'Rộng',
+    flickerGuardLabel: 'Chống nhấp nháy màn hình',
 
     // Giao diện
     theme: 'Giao diện',
@@ -477,6 +520,17 @@ const Map<AppLocale, LocalizedStrings> _strings = {
         'tạm thời trên các ứng dụng như Google Play, Ngân hàng. '
         'Vui lòng tắt/bật nhanh qua thanh thông báo (Quick Settings) '
         'khi cần thao tác.',
+
+    // Added Keys for Dashboard and Children
+    shieldActive: 'HOẠT ĐỘNG',
+    shieldOff: 'TẮT',
+    tapToPause: 'Chạm lá chắn để tạm dừng bảo vệ',
+    tapToActivate: 'Chạm lá chắn để kích hoạt bảo vệ',
+    activateToCalibrate: 'BẬT DỊCH VỤ ĐỂ HIỆU CHỈNH',
+    dragToMove: 'Kéo để di chuyển',
+    saving: 'Đang lưu...',
+    applyProtectedArea: 'Áp dụng vùng bảo vệ',
+    protectedAreaSaved: 'Đã lưu vùng bảo vệ',
 
     // Quyền / Màn hình Onboarding (Gatekeeper)
     permAccessibilityTitle: 'Bật Dịch vụ Trợ năng',

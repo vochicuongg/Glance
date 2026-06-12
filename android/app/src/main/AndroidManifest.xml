@@ -90,7 +90,7 @@
              ════════════════════════════════════════════════════════════════ -->
         <service
             android:name=".GlanceQuickTileService"
-            android:label="Glance"
+            android:label="@string/tile_label"
             android:icon="@drawable/ic_tile_vector_logo"
             android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
