@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/localization/locale_provider.dart';
@@ -55,15 +56,17 @@ void main() async {
     final results = await Future.wait([
       GlanceChannelService.isAccessibilityEnabled(),
       GlanceChannelService.isOverlayPermissionGranted(),
+      Permission.ignoreBatteryOptimizations.isGranted,
     ]);
     final hasAccessibility = results[0];
     final hasOverlay = results[1];
+    final hasBattery = results[2];
 
-    // Standard mode only needs overlay; maximum needs both
+    // Standard mode needs overlay and battery; maximum needs accessibility, overlay, and battery
     if (protectionMode == 'standard') {
-      hasAllPermissions = hasOverlay;
+      hasAllPermissions = hasOverlay && hasBattery;
     } else {
-      hasAllPermissions = hasAccessibility && hasOverlay;
+      hasAllPermissions = hasAccessibility && hasOverlay && hasBattery;
 
       // ── Safety net: If maximum mode was saved but accessibility is
       // not granted (e.g. app was killed while user was in system
@@ -73,10 +76,10 @@ void main() async {
       // which would navigate to ModeSelectionScreen on back press.
       if (!hasAccessibility) {
         await prefs.setString('protection_mode', 'standard');
-        // If overlay is granted, go straight to Dashboard in standard mode.
+        // If overlay and battery are granted, go straight to Dashboard in standard mode.
         // If overlay is also missing, still go to Dashboard — the user
         // was previously onboarded and can re-grant from Settings.
-        hasAllPermissions = true;
+        hasAllPermissions = hasOverlay && hasBattery;
       }
     }
   }

@@ -7,6 +7,9 @@
     <!-- Draw overlay on top of all other apps (fallback for non-accessibility mode) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Request ignoring battery optimizations to keep service alive in background -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- Prevent the system from killing our sensor-reading service -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 

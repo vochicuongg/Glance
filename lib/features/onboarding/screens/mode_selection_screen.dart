@@ -111,7 +111,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Chọn chế độ bảo vệ phù hợp',
+                  strings.chooseProtectionModeTitle,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -132,28 +132,25 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                           onTap: () =>
                               setState(() => _selectedMode = 'standard'),
                           icon: Icons.verified_user_rounded,
-                          badge: 'Khuyên dùng khi Thanh toán',
+                          badge: strings.modeRecommendPayment,
                           title: strings.standardMode,
                           colorScheme: colorScheme,
                           isDark: isDark,
                           theme: theme,
-                          features: const [
+                          features: [
                             _FeatureItem(
                               icon: Icons.check_circle_outline_rounded,
-                              text:
-                                  'Hoạt động mượt mà, tương thích với mọi ứng dụng.',
+                              text: strings.modeStandardFeature1,
                               isPositive: true,
                             ),
                             _FeatureItem(
                               icon: Icons.lock_outline_rounded,
-                              text:
-                                  'Yêu cầu quyền: Hiển thị trên ứng dụng khác.',
+                              text: strings.modeStandardFeature2,
                               isPositive: true,
                             ),
                             _FeatureItem(
                               icon: Icons.info_outline_rounded,
-                              text:
-                                  'Lưu ý: Lớp phủ vừa phải, có thể nhìn thấy nội dung ở mức tương đối.',
+                              text: strings.modeStandardFeature3,
                               isPositive: false,
                             ),
                           ],
@@ -167,28 +164,25 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                           onTap: () =>
                               setState(() => _selectedMode = 'maximum'),
                           icon: Icons.security_rounded,
-                          badge: 'Bảo vệ Toàn diện',
+                          badge: strings.modeMaxProtection,
                           title: strings.maximumMode,
                           colorScheme: colorScheme,
                           isDark: isDark,
                           theme: theme,
-                          features: const [
+                          features: [
                             _FeatureItem(
                               icon: Icons.check_circle_outline_rounded,
-                              text:
-                                  'Bảo mật cấp độ cao nhất, an tâm tuyệt đối.',
+                              text: strings.modeMaxFeature1,
                               isPositive: true,
                             ),
                             _FeatureItem(
                               icon: Icons.lock_outline_rounded,
-                              text:
-                                  'Yêu cầu quyền: Trợ năng & Hiển thị trên ứng dụng khác.',
+                              text: strings.modeMaxFeature2,
                               isPositive: true,
                             ),
                             _FeatureItem(
                               icon: Icons.info_outline_rounded,
-                              text:
-                                  'Lưu ý: Một số ứng dụng Ngân hàng có thể từ chối truy cập.',
+                              text: strings.modeMaxFeature3,
                               isPositive: false,
                             ),
                           ],
@@ -217,7 +211,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      '⚠️ VUI LÒNG ĐỌC KỸ ƯU VÀ NHƯỢC ĐIỂM CỦA TỪNG CHẾ ĐỘ.',
+                                      strings.modeSelectionWarningTitle,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -229,7 +223,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                                       height: 10,
                                     ), // Khoảng cách giữa các dòng
                                     Text(
-                                      '🔒 Khuyên dùng ${strings.standardMode}, tránh lỗi xung đột thanh toán.',
+                                      strings.modeSelectionRecommendStandard.replaceFirst('%s', strings.standardMode),
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -239,7 +233,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      '🛡️ Cam kết KHÔNG thu thập bất kỳ dữ liệu cá nhân.',
+                                      strings.modeSelectionNoDataCollected,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -249,7 +243,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      ' ⚙️ Thay đổi chế độ dễ dàng trong mục Cài đặt.',
+                                      strings.modeSelectionChangeInSettings,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -282,9 +276,9 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                       child: FilledButton.icon(
                         onPressed: _selectedMode != null ? _onConfirm : null,
                         icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                        label: const Text(
-                          'Tiếp tục',
-                          style: TextStyle(
+                        label: Text(
+                          strings.continueButton,
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),

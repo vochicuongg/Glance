@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/localization/app_strings.dart';
@@ -140,7 +141,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final hasOverlay =
           await GlanceChannelService.isOverlayPermissionGranted();
 
-      if (!hasAccessibility || !hasOverlay) {
+      final batteryGranted = await Permission.ignoreBatteryOptimizations.isGranted;
+
+      if (!hasAccessibility || !hasOverlay || !batteryGranted) {
         // 3. Missing permissions → navigate to PermissionScreen
         if (!mounted) return;
         final navigator = Navigator.of(context);
@@ -156,8 +159,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             await GlanceChannelService.isAccessibilityEnabled();
         final recheckOverlay =
             await GlanceChannelService.isOverlayPermissionGranted();
+        final recheckBattery =
+            await Permission.ignoreBatteryOptimizations.isGranted;
 
-        if (!recheckAccessibility || !recheckOverlay) {
+        if (!recheckAccessibility || !recheckOverlay || !recheckBattery) {
           // User didn't grant → revert to old mode
           await prefs.setString('protection_mode', oldMode);
           if (!mounted) return;

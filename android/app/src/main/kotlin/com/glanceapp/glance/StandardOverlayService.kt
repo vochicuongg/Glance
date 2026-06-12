@@ -128,6 +128,7 @@ class StandardOverlayService : Service(), SensorEventListener {
     // ── VSYNC-driven interpolation target ─────────────────────────────────
     private var targetAlpha: Float = 0f
     private var isAnimationRunning = false
+    private var lastVsyncTime: Long = 0L // Biến Watchdog theo dõi nhịp đập VSYNC
 
     // ── EMA-smoothed alpha (directly controls overlay opacity) ────────────
     private var currentDisplayedAlpha: Float = 0f
@@ -138,20 +139,25 @@ class StandardOverlayService : Service(), SensorEventListener {
                 isAnimationRunning = false
                 return
             }
-            isAnimationRunning = true
+
+            // Ghi nhận nhịp đập sinh tồn của VSYNC
+            lastVsyncTime = System.currentTimeMillis()
 
             val diff = targetAlpha - currentDisplayedAlpha
             if (Math.abs(diff) > 0.05f) {
                 val emaCoefficient = if (targetAlpha > currentDisplayedAlpha) 0.6f else 0.1f
                 currentDisplayedAlpha += emaCoefficient * diff
                 applyAlphaToOverlay(currentDisplayedAlpha.toInt())
-            } else if (currentDisplayedAlpha != targetAlpha) {
-                currentDisplayedAlpha = targetAlpha
-                applyAlphaToOverlay(currentDisplayedAlpha.toInt())
+                isAnimationRunning = true
+                overlayViews[0].postOnAnimation(this)
+            } else {
+                // Tắt mượt mà khi đã đạt target để tiết kiệm pin tối đa
+                if (currentDisplayedAlpha != targetAlpha) {
+                    currentDisplayedAlpha = targetAlpha
+                    applyAlphaToOverlay(currentDisplayedAlpha.toInt())
+                }
+                isAnimationRunning = false
             }
-
-            // Móc trực tiếp vào VSYNC của WindowManager, sống độc lập với trạng thái Flutter
-            overlayViews[0].postOnAnimation(this)
         }
     }
 
@@ -474,8 +480,9 @@ class StandardOverlayService : Service(), SensorEventListener {
         val rawGz = rotationMatrix[8]
 
         // ── LPF: Lọc nhiễu góc chéo bằng Exponential Moving Average ──────
-        if (filteredGx == 0f && filteredGy == 0f && filteredGz == 0f) {
-            // Frame đầu tiên: gán trực tiếp để không bị độ trễ khởi tạo
+        // Reset bộ lọc ngay lập tức khi cần lấy mốc (needsBaselineReset) để triệt tiêu bóng ma dữ liệu cũ
+        if ((filteredGx == 0f && filteredGy == 0f && filteredGz == 0f) || needsBaselineReset) {
+            // Ép bộ lọc nhận ngay giá trị thực tế để baseline bắt mốc chuẩn xác 100%
             filteredGx = rawGx
             filteredGy = rawGy
             filteredGz = rawGz
@@ -535,12 +542,23 @@ class StandardOverlayService : Service(), SensorEventListener {
             0f
         }
 
-        // Persistent View: Chỉ tạo View duy nhất 1 lần khi vượt ngưỡng, VSYNC sẽ tự lo phần mờ/hiển thị
+        // Persistent View: Chỉ tạo View duy nhất 1 lần khi vượt ngưỡng
         if (!isOverlayShowing && this.targetAlpha > 0f) {
             isOverlayShowing = true
             createOverlayView()
+        } else if (isOverlayShowing && Math.abs(this.targetAlpha - currentDisplayedAlpha) > 0.05f) {
+            // Watchdog: Nếu hệ thống Android ngầm drop VSYNC (để tiết kiệm pin) khiến animation bị kẹt
+            val now = System.currentTimeMillis()
+            if (!isAnimationRunning || (now - lastVsyncTime > 100L)) {
+                isAnimationRunning = true
+                lastVsyncTime = now
+                if (overlayViews.isNotEmpty()) {
+                    overlayViews[0].removeCallbacks(vsyncRunnable)
+                    overlayViews[0].postOnAnimation(vsyncRunnable)
+                }
+            }
         }
-    }
+    } // End of onSensorChanged
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 

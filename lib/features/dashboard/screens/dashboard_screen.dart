@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/localization/app_strings.dart';
@@ -171,13 +172,14 @@ class _DashboardScreenState extends State<DashboardScreen>
 
       final accessibility = await GlanceChannelService.isAccessibilityEnabled();
       final overlay = await GlanceChannelService.isOverlayPermissionGranted();
+      final battery = await Permission.ignoreBatteryOptimizations.isGranted;
 
-      // Standard mode: only overlay needed; Maximum mode: both needed
+      // Standard mode: overlay + battery; Maximum mode: accessibility + overlay + battery
       final bool permissionsMissing;
       if (protectionMode == 'standard') {
-        permissionsMissing = !overlay;
+        permissionsMissing = !overlay || !battery;
       } else {
-        permissionsMissing = !accessibility || !overlay;
+        permissionsMissing = !accessibility || !overlay || !battery;
       }
 
       if (permissionsMissing) {

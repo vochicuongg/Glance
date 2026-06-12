@@ -163,6 +163,10 @@ class LocalizedStrings {
   final String permOverlayTitle;
   final String permOverlayDesc;
   final String permOverlayButton;
+  final String batteryPermissionTitle;
+  final String batteryPermissionDesc1;
+  final String batteryPermissionDesc2;
+  final String openBatterySettings;
   final String permStepOf;
   final String permRefreshStatus;
   final String permGrantRequired;
@@ -174,6 +178,22 @@ class LocalizedStrings {
   final String supportDev;
   final String copySuccess;
   final String copyButton;
+
+  // ── Mode Selection Screen (Onboarding) ─────────────────────────────
+  final String chooseProtectionModeTitle;
+  final String modeRecommendPayment;
+  final String modeMaxProtection;
+  final String modeStandardFeature1;
+  final String modeStandardFeature2;
+  final String modeStandardFeature3;
+  final String modeMaxFeature1;
+  final String modeMaxFeature2;
+  final String modeMaxFeature3;
+  final String modeSelectionWarningTitle;
+  final String modeSelectionRecommendStandard;
+  final String modeSelectionNoDataCollected;
+  final String modeSelectionChangeInSettings;
+  final String continueButton;
 
   const LocalizedStrings({
     required this.protectionActive,
@@ -260,6 +280,10 @@ class LocalizedStrings {
     required this.permOverlayTitle,
     required this.permOverlayDesc,
     required this.permOverlayButton,
+    required this.batteryPermissionTitle,
+    required this.batteryPermissionDesc1,
+    required this.batteryPermissionDesc2,
+    required this.openBatterySettings,
     required this.permStepOf,
     required this.permRefreshStatus,
     required this.permGrantRequired,
@@ -269,6 +293,20 @@ class LocalizedStrings {
     required this.supportDev,
     required this.copySuccess,
     required this.copyButton,
+    required this.chooseProtectionModeTitle,
+    required this.modeRecommendPayment,
+    required this.modeMaxProtection,
+    required this.modeStandardFeature1,
+    required this.modeStandardFeature2,
+    required this.modeStandardFeature3,
+    required this.modeMaxFeature1,
+    required this.modeMaxFeature2,
+    required this.modeMaxFeature3,
+    required this.modeSelectionWarningTitle,
+    required this.modeSelectionRecommendStandard,
+    required this.modeSelectionNoDataCollected,
+    required this.modeSelectionChangeInSettings,
+    required this.continueButton,
   });
 }
 
@@ -418,6 +456,10 @@ const Map<AppLocale, LocalizedStrings> _strings = {
         'Please grant this permission so Glance can protect your '
         'screen content in real-time.',
     permOverlayButton: 'Open Overlay Settings',
+    batteryPermissionTitle: 'Ignore Battery Optimization',
+    batteryPermissionDesc1: 'Glance needs stable background operation to maintain continuous protection.',
+    batteryPermissionDesc2: 'Please grant Unrestricted battery access to prevent the system from killing the app.',
+    openBatterySettings: 'Open Battery Settings',
     permStepOf: 'Step %d of %d',
     permRefreshStatus: 'Already enabled? Continue',
     permGrantRequired: 'Please grant all permissions to use this feature.',
@@ -429,6 +471,22 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     supportDev: 'Buy me a coffee ☕',
     copySuccess: 'Account number copied!',
     copyButton: 'Copy',
+
+    // Mode Selection Screen (Onboarding)
+    chooseProtectionModeTitle: 'Choose suitable protection mode',
+    modeRecommendPayment: 'Recommended for Payment',
+    modeMaxProtection: 'Maximum Protection',
+    modeStandardFeature1: 'Smooth operation, compatible with all apps.',
+    modeStandardFeature2: 'Required permission: Display over other apps.',
+    modeStandardFeature3: 'Note: Moderate overlay, content might be relatively visible.',
+    modeMaxFeature1: 'Highest security level, absolute peace of mind.',
+    modeMaxFeature2: 'Required permission: Accessibility & Display over other apps.',
+    modeMaxFeature3: 'Note: Some Banking apps may refuse to run.',
+    modeSelectionWarningTitle: '⚠️ PLEASE READ CAREFULLY THE PROS AND CONS OF EACH MODE.',
+    modeSelectionRecommendStandard: '🔒 Recommended %s to avoid payment conflicts.',
+    modeSelectionNoDataCollected: '🛡️ Commited to NOT collecting any personal data.',
+    modeSelectionChangeInSettings: '⚙️ Easily change protection mode in Settings.',
+    continueButton: 'Continue',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -569,6 +627,10 @@ const Map<AppLocale, LocalizedStrings> _strings = {
         'Vui lòng cấp quyền này để Glance có thể bảo vệ nội dung '
         'màn hình của bạn theo thời gian thực.',
     permOverlayButton: 'Mở Cài đặt Hiển thị',
+    batteryPermissionTitle: 'Bỏ qua Tối ưu hóa Pin',
+    batteryPermissionDesc1: 'Glance cần hoạt động ổn định ở chế độ nền để duy trì lá chắn bảo vệ liên tục.',
+    batteryPermissionDesc2: 'Vui lòng cấp quyền Không hạn chế (Unrestricted) để hệ thống không tự động tắt ứng dụng khi tắt màn hình.',
+    openBatterySettings: 'Mở Cài đặt Pin',
     permStepOf: 'Bước %d / %d',
     permRefreshStatus: 'Đã bật? Tiếp tục',
     permGrantRequired: 'Vui lòng cấp đủ quyền để sử dụng tính năng.',
@@ -580,6 +642,22 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     supportDev: 'Tiếp thêm động lực ☕',
     copySuccess: 'Đã sao chép số tài khoản!',
     copyButton: 'Sao chép',
+
+    // Mode Selection Screen (Onboarding)
+    chooseProtectionModeTitle: 'Chọn chế độ bảo vệ phù hợp',
+    modeRecommendPayment: 'Khuyên dùng khi Thanh toán',
+    modeMaxProtection: 'Bảo vệ Toàn diện',
+    modeStandardFeature1: 'Hoạt động mượt mà, tương thích với mọi ứng dụng.',
+    modeStandardFeature2: 'Yêu cầu quyền: Hiển thị trên ứng dụng khác.',
+    modeStandardFeature3: 'Lưu ý: Lớp phủ vừa phải, có thể nhìn thấy nội dung ở mức tương đối.',
+    modeMaxFeature1: 'Bảo mật cấp độ cao nhất, an tâm tuyệt đối.',
+    modeMaxFeature2: 'Yêu cầu quyền: Trợ năng & Hiển thị trên ứng dụng khác.',
+    modeMaxFeature3: 'Lưu ý: Một số ứng dụng Ngân hàng có thể từ chối truy cập.',
+    modeSelectionWarningTitle: '⚠️ VUI LÒNG ĐỌC KỸ ƯU VÀ NHƯỢC ĐIỂM CỦA TỪNG CHẾ ĐỘ.',
+    modeSelectionRecommendStandard: '🔒 Khuyên dùng %s, tránh lỗi xung đột thanh toán.',
+    modeSelectionNoDataCollected: '🛡️ Cam kết KHÔNG thu thập bất kỳ dữ liệu cá nhân.',
+    modeSelectionChangeInSettings: '⚙️ Thay đổi chế độ dễ dàng trong mục Cài đặt.',
+    continueButton: 'Tiếp tục',
   ),
 };
 

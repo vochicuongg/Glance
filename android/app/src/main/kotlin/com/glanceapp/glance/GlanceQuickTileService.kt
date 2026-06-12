@@ -1,3 +1,4 @@
+
 package com.glanceapp.glance
 
 import android.content.Context
@@ -109,21 +110,16 @@ class GlanceQuickTileService : TileService() {
 
     private fun handleStandardModeTile(tile: Tile, activate: Boolean) {
         if (!activate) {
-            // ── STOP: Send broadcast so the service can stopForeground + stopSelf ──
             Log.d(TAG, "Standard — deactivating service")
-
             sendBroadcast(Intent(StandardOverlayService.ACTION_STOP_SERVICE).apply {
                 setPackage(packageName)
             })
             Log.d(TAG, "Standard — stop broadcast sent via Tile")
         } else {
-            // ── START: Check overlay permission, then start foreground service ─────
             if (!Settings.canDrawOverlays(this)) {
                 Log.w(TAG, "Standard — overlay permission missing, opening settings")
-                // Revert isActive since we can't actually start
                 getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
                     .edit().putBoolean("flutter.isActive", false).apply()
-
                 val settingsIntent = Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     android.net.Uri.parse("package:${packageName}")
@@ -133,10 +129,7 @@ class GlanceQuickTileService : TileService() {
                 startActivityAndCollapse(settingsIntent)
                 return
             }
-
             Log.d(TAG, "Standard — activating foreground service")
-
-            // Start as foreground service with START_STANDARD_MODE action.
             val serviceIntent = Intent(this, StandardOverlayService::class.java).apply {
                 action = StandardOverlayService.ACTION_START_STANDARD_MODE
                 putExtra("auto_calibrate", true)
@@ -150,30 +143,23 @@ class GlanceQuickTileService : TileService() {
 
     private fun handleMaxModeTile(tile: Tile, activate: Boolean) {
         if (!activate) {
-            // ── HIBERNATE: Send broadcast to hide overlay & pause sensor ──
             Log.d(TAG, "Max — hibernating service")
-
             sendBroadcast(Intent(MaxOverlayService.ACTION_STOP_SERVICE).apply {
                 setPackage(packageName)
             })
             Log.d(TAG, "Max — hibernate broadcast sent via Tile")
         } else {
-            // ── RESUME: Check if accessibility is enabled ─────────────────
             if (MaxOverlayService.isAccessibilityEnabled(this)) {
                 Log.d(TAG, "Max — resuming service")
-
                 sendBroadcast(Intent(MaxOverlayService.ACTION_RESUME_SERVICE).apply {
                     setPackage(packageName)
                     putExtra("auto_calibrate", true)
                 })
                 Log.d(TAG, "Max — resume broadcast sent via Tile")
             } else {
-                // Accessibility not enabled — guide user to settings
                 Log.w(TAG, "Max — Accessibility not enabled, opening settings")
-                // Revert isActive since we can't actually start
                 getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
                     .edit().putBoolean("flutter.isActive", false).apply()
-
                 val settingsIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/localization/app_strings.dart';
@@ -49,6 +50,9 @@ class _PermissionScreenState extends State<PermissionScreen>
 
   /// Whether the SYSTEM_ALERT_WINDOW (Overlay) permission is granted.
   bool _hasOverlay = false;
+
+  /// Whether the battery optimization permission is granted.
+  bool _hasBattery = false;
 
   /// Loading indicator while initial permission check is in progress.
   bool _isLoading = true;
@@ -104,6 +108,7 @@ class _PermissionScreenState extends State<PermissionScreen>
     final results = await Future.wait([
       GlanceChannelService.isAccessibilityEnabled(),
       GlanceChannelService.isOverlayPermissionGranted(),
+      Permission.ignoreBatteryOptimizations.isGranted,
     ]);
 
     if (!mounted) return;
@@ -111,18 +116,19 @@ class _PermissionScreenState extends State<PermissionScreen>
     setState(() {
       _hasAccessibility = results[0];
       _hasOverlay = results[1];
+      _hasBattery = results[2];
       _isLoading = false;
     });
 
     // ── Mode-aware navigation guard ─────────────────────────────────────
     if (_protectionMode == 'standard') {
-      // Standard mode: only overlay needed
-      if (_hasOverlay) {
+      // Standard mode: overlay and battery needed
+      if (_hasOverlay && _hasBattery) {
         _navigateForward();
       }
     } else {
-      // Maximum mode: both permissions needed
-      if (_hasAccessibility && _hasOverlay) {
+      // Maximum mode: accessibility, overlay, and battery needed
+      if (_hasAccessibility && _hasOverlay && _hasBattery) {
         _navigateForward();
       }
     }
@@ -165,30 +171,52 @@ class _PermissionScreenState extends State<PermissionScreen>
     final Widget stepContent;
 
     if (_protectionMode == 'standard') {
-      // ── STANDARD MODE: Only 1 step (Overlay) ───────────────────────────
-      stepContent = _PermissionStepView(
-        key: const ValueKey('step_overlay_standard'),
-        currentStep: 1,
-        totalSteps: 1,
-        icon: Icons.layers_rounded,
-        title: strings.permOverlayTitle,
-        description: strings.permOverlayDesc,
-        buttonText: strings.permOverlayButton,
-        refreshText: strings.permRefreshStatus,
-        onOpenSettings: () => GlanceChannelService.openOverlaySettings(),
-        onRefresh: _checkPermissions,
-        colorScheme: colorScheme,
-        theme: theme,
-        strings: strings,
-      );
+      // ── STANDARD MODE: 2 steps (Overlay → Battery) ──────────────────────
+      if (!_hasOverlay) {
+        stepContent = _PermissionStepView(
+          key: const ValueKey('step_overlay_standard'),
+          currentStep: 1,
+          totalSteps: 2,
+          icon: Icons.layers_rounded,
+          title: strings.permOverlayTitle,
+          description: strings.permOverlayDesc,
+          buttonText: strings.permOverlayButton,
+          refreshText: strings.permRefreshStatus,
+          onOpenSettings: () => GlanceChannelService.openOverlaySettings(),
+          onRefresh: _checkPermissions,
+          colorScheme: colorScheme,
+          theme: theme,
+          strings: strings,
+        );
+      } else {
+        stepContent = _PermissionStepView(
+          key: const ValueKey('step_battery_standard'),
+          currentStep: 2,
+          totalSteps: 2,
+          icon: Icons.battery_saver_rounded,
+          title: strings.batteryPermissionTitle,
+          description: '${strings.batteryPermissionDesc1}\n\n${strings.batteryPermissionDesc2}',
+          buttonText: strings.openBatterySettings,
+          buttonIcon: Icons.battery_saver_rounded,
+          refreshText: strings.permRefreshStatus,
+          onOpenSettings: () async {
+            await Permission.ignoreBatteryOptimizations.request();
+            _checkPermissions();
+          },
+          onRefresh: _checkPermissions,
+          colorScheme: colorScheme,
+          theme: theme,
+          strings: strings,
+        );
+      }
     } else {
-      // ── MAXIMUM MODE: 2 steps (Accessibility → Overlay) ────────────────
+      // ── MAXIMUM MODE: 3 steps (Accessibility → Overlay → Battery) ───────
       if (!_hasAccessibility) {
         // Step 1: Accessibility
         stepContent = _PermissionStepView(
           key: const ValueKey('step_accessibility'),
           currentStep: 1,
-          totalSteps: 2,
+          totalSteps: 3,
           icon: Icons.accessibility_new_rounded,
           title: strings.permAccessibilityTitle,
           description: strings.permAccessibilityDesc,
@@ -202,18 +230,39 @@ class _PermissionScreenState extends State<PermissionScreen>
           strings: strings,
           showRestrictedSettingsHelp: true,
         );
-      } else {
+      } else if (!_hasOverlay) {
         // Step 2: Overlay
         stepContent = _PermissionStepView(
           key: const ValueKey('step_overlay'),
           currentStep: 2,
-          totalSteps: 2,
+          totalSteps: 3,
           icon: Icons.layers_rounded,
           title: strings.permOverlayTitle,
           description: strings.permOverlayDesc,
           buttonText: strings.permOverlayButton,
           refreshText: strings.permRefreshStatus,
           onOpenSettings: () => GlanceChannelService.openOverlaySettings(),
+          onRefresh: _checkPermissions,
+          colorScheme: colorScheme,
+          theme: theme,
+          strings: strings,
+        );
+      } else {
+        // Step 3: Battery
+        stepContent = _PermissionStepView(
+          key: const ValueKey('step_battery'),
+          currentStep: 3,
+          totalSteps: 3,
+          icon: Icons.battery_saver_rounded,
+          title: strings.batteryPermissionTitle,
+          description: '${strings.batteryPermissionDesc1}\n\n${strings.batteryPermissionDesc2}',
+          buttonText: strings.openBatterySettings,
+          buttonIcon: Icons.battery_saver_rounded,
+          refreshText: strings.permRefreshStatus,
+          onOpenSettings: () async {
+            await Permission.ignoreBatteryOptimizations.request();
+            _checkPermissions();
+          },
           onRefresh: _checkPermissions,
           colorScheme: colorScheme,
           theme: theme,
@@ -325,6 +374,7 @@ class _PermissionStepView extends StatelessWidget {
   final ThemeData theme;
   final LocalizedStrings strings;
   final bool showRestrictedSettingsHelp;
+  final IconData buttonIcon;
 
   const _PermissionStepView({
     super.key,
@@ -341,6 +391,7 @@ class _PermissionStepView extends StatelessWidget {
     required this.theme,
     required this.strings,
     this.showRestrictedSettingsHelp = false,
+    this.buttonIcon = Icons.settings_rounded,
   });
 
   @override
@@ -422,7 +473,7 @@ class _PermissionStepView extends StatelessWidget {
             height: 56,
             child: FilledButton.icon(
               onPressed: onOpenSettings,
-              icon: const Icon(Icons.settings_rounded, size: 20),
+              icon: Icon(buttonIcon, size: 20),
               label: Text(
                 buttonText,
                 style: const TextStyle(
