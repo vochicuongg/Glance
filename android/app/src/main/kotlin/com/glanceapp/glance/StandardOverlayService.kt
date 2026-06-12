@@ -87,6 +87,13 @@ class StandardOverlayService : Service(), SensorEventListener {
         private const val KEY_SENSITIVITY = "sensitivity"
         private const val KEY_TOLERANCE = "tolerance"
 
+        // ── Targeted Area Config ──────────────────────────────────────────────
+        private const val KEY_OVERLAY_MODE = "overlay_mode"
+        private const val KEY_AREA_X = "area_x"
+        private const val KEY_AREA_Y = "area_y"
+        private const val KEY_AREA_WIDTH = "area_width"
+        private const val KEY_AREA_HEIGHT = "area_height"
+
         // ── Notification constants ────────────────────────────────────────
         private const val NOTIF_CHANNEL_ID = "glance_standard_channel"
         private const val NOTIF_ID = 9001
@@ -110,6 +117,13 @@ class StandardOverlayService : Service(), SensorEventListener {
     // ── Sensor configuration ──────────────────────────────────────────────
     private var sensorSensitivity: Float = 0.5f
     private var sensorTolerance: Float = 5.0f
+
+    // ── Targeted Area Config (instance vars) ──────────────────────────────
+    private var overlayMode: String = "fullscreen"
+    private var areaX: Int = 0
+    private var areaY: Int = 0
+    private var areaWidth: Int = WindowManager.LayoutParams.MATCH_PARENT
+    private var areaHeight: Int = WindowManager.LayoutParams.MATCH_PARENT
 
     private var isOverlayShowing = false
     private var lastSensorStreamTime: Long = 0L
@@ -273,6 +287,14 @@ class StandardOverlayService : Service(), SensorEventListener {
                         notifyTileStateChanged()
                     }
                     Log.d(TAG, "Shield RESUMED — config reloaded, baseline reset, overlay hidden, isRunning=$isRunning")
+                }
+                ACTION_SET_OVERLAY_MODE, ACTION_SET_TARGETED_AREA -> {
+                    loadSavedConfig()
+                    if (isOverlayShowing) {
+                        removeOverlayView()
+                        createOverlayView()
+                    }
+                    Log.d(TAG, "Targeted Area / Mode updated dynamically")
                 }
             }
         }
@@ -584,13 +606,35 @@ class StandardOverlayService : Service(), SensorEventListener {
      */
     private fun createOverlayView() {
         if (overlayViews.isNotEmpty()) return
-
         val wm = windowManager ?: return
 
         try {
+            val isTargeted = overlayMode == "targeted"
+            val density = resources.displayMetrics.density
+
+            // Lấy kích thước THẬT của màn hình vật lý (Bao phủ cả Status Bar & Nav Bar)
+            val realW: Int
+            val realH: Int
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val windowMetrics = wm.maximumWindowMetrics
+                realW = windowMetrics.bounds.width()
+                realH = windowMetrics.bounds.height()
+            } else {
+                val realMetrics = android.util.DisplayMetrics()
+                @Suppress("DEPRECATION")
+                wm.defaultDisplay.getRealMetrics(realMetrics)
+                realW = realMetrics.widthPixels
+                realH = realMetrics.heightPixels
+            }
+
+            val pxX = if (isTargeted) (areaX * density).toInt() else 0
+            val pxY = if (isTargeted) (areaY * density).toInt() else 0
+            val pxW = if (isTargeted && areaWidth > 0) (areaWidth * density).toInt() else realW
+            val pxH = if (isTargeted && areaHeight > 0) (areaHeight * density).toInt() else realH
+
             val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
+                pxW,
+                pxH,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -600,28 +644,26 @@ class StandardOverlayService : Service(), SensorEventListener {
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
+                if (isTargeted) {
+                    x = pxX
+                    y = pxY
+                }
+                // Ép tràn viền (hỗ trợ tối đa cho Standard Mode)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                }
             }
 
             val view = View(this).apply {
                 setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
                 alpha = 1f
-                @Suppress("DEPRECATION")
-                systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                )
+                // Đã xóa systemUiVisibility để Android không ép Z-Order xuống dưới system bars
             }
             wm.addView(view, params)
             overlayViews.add(view)
             if (!isAnimationRunning && overlayViews.isNotEmpty()) {
                 overlayViews[0].postOnAnimation(vsyncRunnable)
             }
-
-            Log.d(TAG, "Standard Shield created — fullscreen alpha overlay, TYPE_APPLICATION_OVERLAY, maxAlpha=$MAX_ALPHA")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create Standard Shield overlay: ${e.message}")
             removeOverlayView()
@@ -665,7 +707,13 @@ class StandardOverlayService : Service(), SensorEventListener {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         sensorSensitivity = prefs.getFloat(KEY_SENSITIVITY, 0.5f)
         sensorTolerance = prefs.getFloat(KEY_TOLERANCE, 5.0f)
-        Log.d(TAG, "Config loaded — sensitivity=$sensorSensitivity, tolerance=${sensorTolerance}°")
+
+        overlayMode = prefs.getString(KEY_OVERLAY_MODE, "fullscreen") ?: "fullscreen"
+        areaX = prefs.getInt(KEY_AREA_X, 0)
+        areaY = prefs.getInt(KEY_AREA_Y, 0)
+        areaWidth = prefs.getInt(KEY_AREA_WIDTH, WindowManager.LayoutParams.MATCH_PARENT)
+        areaHeight = prefs.getInt(KEY_AREA_HEIGHT, WindowManager.LayoutParams.MATCH_PARENT)
+        Log.d(TAG, "Config loaded — mode=$overlayMode, area=($areaX, $areaY, $areaWidth, $areaHeight)")
     }
 
     private fun notifyTileStateChanged() {

@@ -1,66 +1,144 @@
-BƯỚC 1: KHÔI PHỤC QUYỀN PIN VÀ NGÔN NGỮ BỊ THIẾU TRONG BẢN BACKUP
+BƯỚC 1: CẬP NHẬT createOverlayView TRONG STANDARD MODE
 
-Target 1: android/app/src/main/AndroidManifest.xml
+Target: android/app/src/main/kotlin/com/glanceapp/glance/StandardOverlayService.kt
 
-Action: Kiểm tra và thêm <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" /> vào danh sách quyền.
+Action: Thay thế toàn bộ hàm createOverlayView() bằng đoạn code sau:
 
-Target 2: lib/core/localization/app_strings.dart
+Kotlin
+  private fun createOverlayView() {
+      if (overlayViews.isNotEmpty()) return
+      val wm = windowManager ?: return
 
-Action: Bổ sung các bản dịch sau vào class LocalizedStrings và 2 Map ngôn ngữ:
-batteryPermissionTitle: "Bỏ qua Tối ưu hóa Pin" / "Ignore Battery Optimization"
-batteryPermissionDesc1: "Glance cần hoạt động ổn định ở chế độ nền để duy trì lá chắn bảo vệ liên tục." / "Glance needs stable background operation to maintain continuous protection."
-batteryPermissionDesc2: "Vui lòng cấp quyền Không hạn chế (Unrestricted) để hệ thống không tự động tắt ứng dụng khi tắt màn hình." / "Please grant Unrestricted battery access to prevent the system from killing the app."
-openBatterySettings: "Mở Cài đặt Pin" / "Open Battery Settings"
+      try {
+          val isTargeted = overlayMode == "targeted"
+          val density = resources.displayMetrics.density
 
-BƯỚC 2: TÍCH HỢP LOGIC BƯỚC ĐỘNG VÀO STATE
+          // Lấy kích thước THẬT của màn hình vật lý (Bao phủ cả Status Bar & Nav Bar)
+          val realW: Int
+          val realH: Int
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+              val windowMetrics = wm.maximumWindowMetrics
+              realW = windowMetrics.bounds.width()
+              realH = windowMetrics.bounds.height()
+          } else {
+              val realMetrics = android.util.DisplayMetrics()
+              @Suppress("DEPRECATION")
+              wm.defaultDisplay.getRealMetrics(realMetrics)
+              realW = realMetrics.widthPixels
+              realH = realMetrics.heightPixels
+          }
 
-Target: lib/features/permissions/screens/permission_screen.dart
+          val pxX = if (isTargeted) (areaX * density).toInt() else 0
+          val pxY = if (isTargeted) (areaY * density).toInt() else 0
+          val pxW = if (isTargeted && areaWidth > 0) (areaWidth * density).toInt() else realW
+          val pxH = if (isTargeted && areaHeight > 0) (areaHeight * density).toInt() else realH
 
-Action:
+          val params = WindowManager.LayoutParams(
+              pxW,
+              pxH,
+              WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+              WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                  WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                  WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                  WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                  WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+              PixelFormat.TRANSLUCENT
+          ).apply {
+              gravity = Gravity.TOP or Gravity.START
+              if (isTargeted) {
+                  x = pxX
+                  y = pxY
+              }
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                  layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+              }
+          }
 
-Thêm import package:permission_handler/permission_handler.dart.
+          val view = View(this).apply {
+              setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
+              alpha = 1f
+              // Đã xóa systemUiVisibility để Android không ép Z-Order xuống dưới system bars
+          }
+          wm.addView(view, params)
+          overlayViews.add(view)
+          if (!isAnimationRunning && overlayViews.isNotEmpty()) {
+              overlayViews[0].postOnAnimation(vsyncRunnable)
+          }
+      } catch (e: Exception) {
+          Log.e(TAG, "Failed to create Standard Shield overlay: \${e.message}")
+          removeOverlayView()
+      }
+  }
+BƯỚC 2: CẬP NHẬT createOverlayView TRONG MAX MODE
 
-Thêm biến bool _hasBattery = false; vào _PermissionScreenState.
+Target: android/app/src/main/kotlin/com/glanceapp/glance/MaxOverlayService.kt
 
-Cập nhật _checkPermissions():
+Action: Thay thế toàn bộ hàm createOverlayView() bằng đoạn code sau:
 
-Check thêm trạng thái Permission.ignoreBatteryOptimizations.isGranted và gán vào _hasBattery thông qua setState.
+Kotlin
+  private fun createOverlayView() {
+      if (overlayViews.isNotEmpty()) return
 
-Ngay dưới khối setState, tính danh sách quyền còn thiếu (missingSteps):
+      try {
+          val isTargeted = overlayMode == "targeted"
+          val density = resources.displayMetrics.density
 
-Dart
-List<String> missing = [];
-if (_protectionMode == 'maximum' && !_hasAccessibility) missing.add('accessibility');
-if (!_hasOverlay) missing.add('overlay');
-if (!_hasBattery) missing.add('battery');
-Nếu missing.isEmpty -> gọi _navigateForward(). (XÓA khối lệnh if/else điều hướng cứng cũ ở cuối hàm).
+          // Lấy kích thước THẬT của màn hình vật lý (Bao phủ cả Status Bar & Nav Bar)
+          val realW: Int
+          val realH: Int
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+              val windowMetrics = windowManager.maximumWindowMetrics
+              realW = windowMetrics.bounds.width()
+              realH = windowMetrics.bounds.height()
+          } else {
+              val realMetrics = android.util.DisplayMetrics()
+              @Suppress("DEPRECATION")
+              windowManager.defaultDisplay.getRealMetrics(realMetrics)
+              realW = realMetrics.widthPixels
+              realH = realMetrics.heightPixels
+          }
 
-BƯỚC 3: RENDER GIAO DIỆN THEO QUYỀN CÒN THIẾU
+          val pxX = if (isTargeted) (areaX * density).toInt() else 0
+          val pxY = if (isTargeted) (areaY * density).toInt() else 0
+          val pxW = if (isTargeted && areaWidth > 0) (areaWidth * density).toInt() else realW
+          val pxH = if (isTargeted && areaHeight > 0) (areaHeight * density).toInt() else realH
 
-Target: Hàm build() trong _PermissionScreenState.
+          for (i in 0 until 2) {
+              val params = WindowManager.LayoutParams(
+                  pxW,
+                  pxH,
+                  WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                  WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                      WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                      WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                      WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                      WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                  PixelFormat.TRANSLUCENT
+              ).apply {
+                  gravity = Gravity.TOP or Gravity.START
+                  if (isTargeted) {
+                      x = pxX
+                      y = pxY
+                  }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                      layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                  }
+              }
 
-Action:
-
-Tính lại missingSteps y hệt như bước 2. Nếu rỗng, trả về Scaffold(body: Center(child: CircularProgressIndicator())).
-
-Tính số bước thông minh:
-
-Dart
-int totalSteps = _protectionMode == 'standard' ? 2 : 3;
-int currentStep = totalSteps - missingSteps.length + 1;
-Gán biến stepContent dựa trên missingSteps.first:
-
-'accessibility': Gọi _PermissionStepView Trợ năng (truyền currentStep, totalSteps, ValueKey('step_acc')).
-
-'overlay': Gọi _PermissionStepView Overlay (truyền currentStep, totalSteps, ValueKey('step_overlay')).
-
-'battery': Gọi _PermissionStepView Pin (truyền currentStep, totalSteps, ValueKey('step_battery'), icon: Icons.battery_alert_rounded, các chuỗi đã thêm ở Bước 1, và nút onOpenSettings gọi Permission.ignoreBatteryOptimizations.request()).
-
-BƯỚC 4: ĐỔI HIỆU ỨNG TRƯỢT THÀNH TRÁI/PHẢI
-
-Target: Thuộc tính transitionBuilder của AnimatedSwitcher trong hàm build().
-
-Action: Đổi tham số Tween<Offset> của SlideTransition.
-Thay thế begin: const Offset(0.0, 0.08) (dọc) bằng begin: const Offset(0.15, 0.0) (ngang) để chuyển trang mượt mà từ phải sang trái.
-
-Hãy dùng công cụ vi phẫu chính xác, không phá vỡ UI tổng thể. Báo cáo khi hoàn tất.
+              val view = View(this).apply {
+                  setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
+                  alpha = 1f
+                  // Đã xóa systemUiVisibility để bảo toàn quyền lực vẽ đè tối thượng của Accessibility Overlay
+              }
+              windowManager.addView(view, params)
+              overlayViews.add(view)
+          }
+          if (!isAnimationRunning && overlayViews.isNotEmpty()) {
+              overlayViews[0].postOnAnimation(vsyncRunnable)
+          }
+      } catch (e: Exception) {
+          Log.e(TAG, "Failed to create Max Shield overlay: \${e.message}")
+          removeOverlayView()
+      }
+  }
+Hãy thực hiện vi phẫu chính xác khối lệnh trên. Báo cáo khi hoàn tất.
