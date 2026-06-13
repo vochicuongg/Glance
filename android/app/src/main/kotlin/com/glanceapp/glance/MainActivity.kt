@@ -403,6 +403,7 @@ class MainActivity : FlutterActivity() {
      * Sends the overlay mode via broadcast to the running service.
      */
     private fun handleSetOverlayMode(mode: String, result: MethodChannel.Result) {
+<<<<<<< HEAD
         // Save the selected overlay mode to shared preferences BEFORE broadcasting.
         // This ensures the native services can read the latest value even if they
         // process the broadcast before the preferences are persisted.
@@ -411,6 +412,8 @@ class MainActivity : FlutterActivity() {
             .putString("overlay_mode", mode)
             .apply()
 
+=======
+>>>>>>> origin/main
         sendBroadcast(Intent(MaxOverlayService.ACTION_SET_OVERLAY_MODE).apply {
             setPackage(packageName)
             putExtra(MaxOverlayService.EXTRA_MODE, mode)
@@ -433,6 +436,7 @@ class MainActivity : FlutterActivity() {
         height: Int,
         result: MethodChannel.Result
     ) {
+<<<<<<< HEAD
         // Persist the targeted area coordinates to shared preferences BEFORE broadcasting.
         // The overlay services load these values from the same prefs in loadSavedConfig().
         val nativePrefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
@@ -443,6 +447,8 @@ class MainActivity : FlutterActivity() {
             .putInt("area_height", height)
             .apply()
 
+=======
+>>>>>>> origin/main
         sendBroadcast(Intent(MaxOverlayService.ACTION_SET_TARGETED_AREA).apply {
             setPackage(packageName)
             putExtra(MaxOverlayService.EXTRA_AREA_X, x)

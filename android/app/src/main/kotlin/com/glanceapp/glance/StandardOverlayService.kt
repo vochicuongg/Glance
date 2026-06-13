@@ -605,21 +605,48 @@ class StandardOverlayService : Service(), SensorEventListener {
      * Standard View with background color controlled by applyAlphaToOverlay.
      */
     private fun createOverlayView() {
+<<<<<<< HEAD
         // Ensure we have the latest configuration from SharedPreferences before
         // constructing the overlay. This guards against race conditions where the
         // broadcast is received but the service hasn't reloaded the prefs yet.
         loadSavedConfig()
+=======
+>>>>>>> origin/main
         if (overlayViews.isNotEmpty()) return
         val wm = windowManager ?: return
 
         try {
             val isTargeted = overlayMode == "targeted"
+<<<<<<< HEAD
 
             // CRITICAL FIX: Dữ liệu từ Flutter đã là Physical Pixels. TUYỆT ĐỐI KHÔNG nhân thêm density.
             val pxX = if (isTargeted) areaX else 0
             val pxY = if (isTargeted) areaY else 0
             val pxW = if (isTargeted && areaWidth > 0) areaWidth else WindowManager.LayoutParams.MATCH_PARENT
             val pxH = if (isTargeted && areaHeight > 0) areaHeight else WindowManager.LayoutParams.MATCH_PARENT
+=======
+            val density = resources.displayMetrics.density
+
+            // Lấy kích thước THẬT của màn hình vật lý (Bao phủ cả Status Bar & Nav Bar)
+            val realW: Int
+            val realH: Int
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val windowMetrics = wm.maximumWindowMetrics
+                realW = windowMetrics.bounds.width()
+                realH = windowMetrics.bounds.height()
+            } else {
+                val realMetrics = android.util.DisplayMetrics()
+                @Suppress("DEPRECATION")
+                wm.defaultDisplay.getRealMetrics(realMetrics)
+                realW = realMetrics.widthPixels
+                realH = realMetrics.heightPixels
+            }
+
+            val pxX = if (isTargeted) (areaX * density).toInt() else 0
+            val pxY = if (isTargeted) (areaY * density).toInt() else 0
+            val pxW = if (isTargeted && areaWidth > 0) (areaWidth * density).toInt() else realW
+            val pxH = if (isTargeted && areaHeight > 0) (areaHeight * density).toInt() else realH
+>>>>>>> origin/main
 
             val params = WindowManager.LayoutParams(
                 pxW,
@@ -637,6 +664,7 @@ class StandardOverlayService : Service(), SensorEventListener {
                     x = pxX
                     y = pxY
                 }
+<<<<<<< HEAD
                 
                 // CRITICAL FIX: Ép tràn viền qua Tai thỏ/Camera đục lỗ
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
@@ -646,11 +674,21 @@ class StandardOverlayService : Service(), SensorEventListener {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                     fitInsetsTypes = 0
                 }
+=======
+                // Ép tràn viền (hỗ trợ tối đa cho Standard Mode)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                }
+>>>>>>> origin/main
             }
 
             val view = View(this).apply {
                 setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
                 alpha = 1f
+<<<<<<< HEAD
+=======
+                // Đã xóa systemUiVisibility để Android không ép Z-Order xuống dưới system bars
+>>>>>>> origin/main
             }
             wm.addView(view, params)
             overlayViews.add(view)
