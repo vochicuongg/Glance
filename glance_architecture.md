@@ -1,143 +1,190 @@
-<<<<<<< HEAD
-1. Trong file: `android/app/src/main/kotlin/com/glanceapp/glance/MainActivity.kt`
-- Tại hàm xử lý `handleSetOverlayMode(mode: String, result: MethodChannel.Result)` và `handleSetTargetedArea(...)`: 
-- Hãy thực hiện việc lưu trạng thái `overlay_mode` (String) và các tọa độ `area_x`, `area_y`, `area_width`, `area_height` (Int) vào SharedPreferences với tên file là "GlanceNativePrefs" TRƯỚC KHI gọi lệnh `sendBroadcast()`.
+**🚨 PHÂN TÍCH LỖI (CRITICAL FIX):**
+1. **Lỗi Double Density:** File `GlanceChannelService.dart` (Flutter) đã xử lý chuyển đổi DP sang PX (thông qua `devicePixelRatio`). Các tham số `areaX`, `areaY`, `areaWidth`, `areaHeight` gửi sang Kotlin **ĐÃ LÀ PIXEL VẬT LÝ**. Do đó, tuyệt đối KHÔNG ĐƯỢC nhân với `density` trong Kotlin nữa.
+2. **Lỗi Cutout/Insets:** Cần áp dụng cờ `LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS` và `fitInsetsTypes = 0` đúng chuẩn để Lớp phủ đè kín Tai thỏ (Notch) và Navigation Bar.
 
-2. Trong file: `android/app/src/main/kotlin/com/glanceapp/glance/StandardOverlayService.kt`
-và `android/app/src/main/kotlin/com/glanceapp/glance/MaxOverlayService.kt`
-- Tại hàm `createOverlayView()` hoặc các hàm nhận Broadcast (`onReceive`):
-- Đảm bảo trước khi LayoutParams được áp dụng, hệ thống phải đọc trực tiếp các giá trị cập nhật mới nhất từ "GlanceNativePrefs".
-- Loại bỏ hoàn toàn việc nhân tọa độ nhận được với `density` (mật độ điểm ảnh) vì luồng dữ liệu truyền từ `GlanceChannelService.dart` sang đã được xử lý quy đổi thành Physical Pixels chuẩn xác.
+**🛠️ NHIỆM VỤ CỦA BẠN (AI):**
+Sử dụng công cụ thay thế code (replace in file) để viết lại TOÀN BỘ hàm `createOverlayView()` trong 2 tệp trên theo đúng logic sau:
 
-Hãy tiến hành viết code refactor cho 3 tệp tin nêu trên một cách sạch sẽ, an toàn và tối ưu nhất.
+**1. Trong tệp `StandardOverlayService.kt`:**
+Thay thế toàn bộ hàm `createOverlayView` bằng mã sau:
+```kotlin
+    private fun createOverlayView() {
+        if (overlayViews.isNotEmpty()) return
+        val wm = windowManager ?: return
+
+        try {
+            val isTargeted = overlayMode == "targeted"
+
+            // CRITICAL FIX: Dữ liệu từ Flutter đã là Physical Pixels. TUYỆT ĐỐI KHÔNG nhân thêm density.
+            val pxX = if (isTargeted) areaX else 0
+            val pxY = if (isTargeted) areaY else 0
+            val pxW = if (isTargeted && areaWidth > 0) areaWidth else WindowManager.LayoutParams.MATCH_PARENT
+            val pxH = if (isTargeted && areaHeight > 0) areaHeight else WindowManager.LayoutParams.MATCH_PARENT
+
+            val params = WindowManager.LayoutParams(
+                pxW,
+                pxH,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                if (isTargeted) {
+                    x = pxX
+                    y = pxY
+                }
+                
+                // CRITICAL FIX: Ép tràn viền qua Tai thỏ/Camera đục lỗ
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                }
+                // CRITICAL FIX: Bỏ qua System Insets (Status Bar & Nav Bar) trên Android 11+
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    fitInsetsTypes = 0
+                }
+            }
+
+            val view = View(this).apply {
+                setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
+                alpha = 1f
+            }
+            wm.addView(view, params)
+            overlayViews.add(view)
+            if (!isAnimationRunning && overlayViews.isNotEmpty()) {
+                overlayViews[0].postOnAnimation(vsyncRunnable)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create Standard Shield overlay: \${e.message}")
+            removeOverlayView()
+        }
+    }
+2. Trong tệp MaxOverlayService.kt:
+Thay thế toàn bộ hàm createOverlayView bằng mã sau (Lưu ý Max mode có 2 layer):
+
+Kotlin
+    private fun createOverlayView() {
+        if (overlayViews.isNotEmpty()) return
+
+        try {
+            val isTargeted = overlayMode == "targeted"
+
+            // CRITICAL FIX: Dữ liệu từ Flutter đã là Physical Pixels. TUYỆT ĐỐI KHÔNG nhân thêm density.
+            val pxX = if (isTargeted) areaX else 0
+            val pxY = if (isTargeted) areaY else 0
+            val pxW = if (isTargeted && areaWidth > 0) areaWidth else WindowManager.LayoutParams.MATCH_PARENT
+            val pxH = if (isTargeted && areaHeight > 0) areaHeight else WindowManager.LayoutParams.MATCH_PARENT
+
+<<<<<<< Updated upstream
+            val params = WindowManager.LayoutParams(
+                pxW,
+                pxH,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                if (isTargeted) {
+                    x = pxX
+                    y = pxY
+                }
+                
+                // CRITICAL FIX: Ép tràn viền qua Tai thỏ/Camera đục lỗ
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                }
+                // CRITICAL FIX: Bỏ qua System Insets (Status Bar & Nav Bar) trên Android 11+
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    fitInsetsTypes = 0
+                }
+            }
+
+            val view = View(this).apply {
+                setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
+                alpha = 1f
+            }
+            wm.addView(view, params)
+            overlayViews.add(view)
+            if (!isAnimationRunning && overlayViews.isNotEmpty()) {
+                overlayViews[0].postOnAnimation(vsyncRunnable)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create Standard Shield overlay: \${e.message}")
+            removeOverlayView()
+        }
+    }
+2. Trong tệp MaxOverlayService.kt:
+Thay thế toàn bộ hàm createOverlayView bằng mã sau (Lưu ý Max mode có 2 layer):
+
+Kotlin
+    private fun createOverlayView() {
+        if (overlayViews.isNotEmpty()) return
+
+        try {
+            val isTargeted = overlayMode == "targeted"
+
+            // CRITICAL FIX: Dữ liệu từ Flutter đã là Physical Pixels. TUYỆT ĐỐI KHÔNG nhân thêm density.
+            val pxX = if (isTargeted) areaX else 0
+            val pxY = if (isTargeted) areaY else 0
+            val pxW = if (isTargeted && areaWidth > 0) areaWidth else WindowManager.LayoutParams.MATCH_PARENT
+            val pxH = if (isTargeted && areaHeight > 0) areaHeight else WindowManager.LayoutParams.MATCH_PARENT
+
+            for (i in 0 until 2) {
+                val params = WindowManager.LayoutParams(
+                    pxW,
+                    pxH,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    if (isTargeted) {
+                        x = pxX
+                        y = pxY
+                    }
+
 =======
-BƯỚC 1: CẬP NHẬT createOverlayView TRONG STANDARD MODE
+            for (i in 0 until 2) {
+                val params = WindowManager.LayoutParams(
+                    pxW,
+                    pxH,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    if (isTargeted) {
+                        x = pxX
+                        y = pxY
+                    }
 
-Target: android/app/src/main/kotlin/com/glanceapp/glance/StandardOverlayService.kt
+>>>>>>> Stashed changes
+                    // CRITICAL FIX: Ép tràn viền qua Tai thỏ/Camera đục lỗ
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    }
+                    // CRITICAL FIX: Bỏ qua System Insets (Status Bar & Nav Bar) trên Android 11+
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        fitInsetsTypes = 0
+                    }
+                }
 
-Action: Thay thế toàn bộ hàm createOverlayView() bằng đoạn code sau:
-
-Kotlin
-  private fun createOverlayView() {
-      if (overlayViews.isNotEmpty()) return
-      val wm = windowManager ?: return
-
-      try {
-          val isTargeted = overlayMode == "targeted"
-          val density = resources.displayMetrics.density
-
-          // Lấy kích thước THẬT của màn hình vật lý (Bao phủ cả Status Bar & Nav Bar)
-          val realW: Int
-          val realH: Int
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-              val windowMetrics = wm.maximumWindowMetrics
-              realW = windowMetrics.bounds.width()
-              realH = windowMetrics.bounds.height()
-          } else {
-              val realMetrics = android.util.DisplayMetrics()
-              @Suppress("DEPRECATION")
-              wm.defaultDisplay.getRealMetrics(realMetrics)
-              realW = realMetrics.widthPixels
-              realH = realMetrics.heightPixels
-          }
-
-          val pxX = if (isTargeted) (areaX * density).toInt() else 0
-          val pxY = if (isTargeted) (areaY * density).toInt() else 0
-          val pxW = if (isTargeted && areaWidth > 0) (areaWidth * density).toInt() else realW
-          val pxH = if (isTargeted && areaHeight > 0) (areaHeight * density).toInt() else realH
-
-          val params = WindowManager.LayoutParams(
-              pxW,
-              pxH,
-              WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-              WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                  WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                  WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                  WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                  WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
-              PixelFormat.TRANSLUCENT
-          ).apply {
-              gravity = Gravity.TOP or Gravity.START
-              if (isTargeted) {
-                  x = pxX
-                  y = pxY
-              }
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                  layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-              }
-          }
-
-          val view = View(this).apply {
-              setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
-              alpha = 1f
-              // Đã xóa systemUiVisibility để Android không ép Z-Order xuống dưới system bars
-          }
-          wm.addView(view, params)
-          overlayViews.add(view)
-          if (!isAnimationRunning && overlayViews.isNotEmpty()) {
-              overlayViews[0].postOnAnimation(vsyncRunnable)
-          }
-      } catch (e: Exception) {
-          Log.e(TAG, "Failed to create Standard Shield overlay: \${e.message}")
-          removeOverlayView()
-      }
-  }
-BƯỚC 2: CẬP NHẬT createOverlayView TRONG MAX MODE
-
-Target: android/app/src/main/kotlin/com/glanceapp/glance/MaxOverlayService.kt
-
-Action: Thay thế toàn bộ hàm createOverlayView() bằng đoạn code sau:
-
-Kotlin
-  private fun createOverlayView() {
-      if (overlayViews.isNotEmpty()) return
-
-      try {
-          val isTargeted = overlayMode == "targeted"
-          val density = resources.displayMetrics.density
-
-          // Lấy kích thước THẬT của màn hình vật lý (Bao phủ cả Status Bar & Nav Bar)
-          val realW: Int
-          val realH: Int
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-              val windowMetrics = windowManager.maximumWindowMetrics
-              realW = windowMetrics.bounds.width()
-              realH = windowMetrics.bounds.height()
-          } else {
-              val realMetrics = android.util.DisplayMetrics()
-              @Suppress("DEPRECATION")
-              windowManager.defaultDisplay.getRealMetrics(realMetrics)
-              realW = realMetrics.widthPixels
-              realH = realMetrics.heightPixels
-          }
-
-          val pxX = if (isTargeted) (areaX * density).toInt() else 0
-          val pxY = if (isTargeted) (areaY * density).toInt() else 0
-          val pxW = if (isTargeted && areaWidth > 0) (areaWidth * density).toInt() else realW
-          val pxH = if (isTargeted && areaHeight > 0) (areaHeight * density).toInt() else realH
-
-          for (i in 0 until 2) {
-              val params = WindowManager.LayoutParams(
-                  pxW,
-                  pxH,
-                  WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                  WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                      WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                      WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                      WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                      WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
-                  PixelFormat.TRANSLUCENT
-              ).apply {
-                  gravity = Gravity.TOP or Gravity.START
-                  if (isTargeted) {
-                      x = pxX
-                      y = pxY
-                  }
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                      layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-                  }
-              }
-
+<<<<<<< Updated upstream
               val view = View(this).apply {
                   setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
                   alpha = 1f
@@ -155,4 +202,22 @@ Kotlin
       }
   }
 Hãy thực hiện vi phẫu chính xác khối lệnh trên. Báo cáo khi hoàn tất.
->>>>>>> origin/main
+=======
+                val view = View(this).apply {
+                    setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
+                    alpha = 1f
+                }
+                windowManager.addView(view, params)
+                overlayViews.add(view)
+            }
+            if (!isAnimationRunning && overlayViews.isNotEmpty()) {
+                overlayViews[0].postOnAnimation(vsyncRunnable)
+            }
+            Log.d(TAG, "Max Shield created — 2 layers, TYPE_ACCESSIBILITY_OVERLAY")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create Max Shield overlay: \${e.message}")
+            removeOverlayView()
+        }
+    }
+Hãy thực thi việc thay thế này bằng công cụ của bạn. Tuyệt đối không thay đổi logic cảm biến (sensor math) hay Watchdog.
+>>>>>>> Stashed changes

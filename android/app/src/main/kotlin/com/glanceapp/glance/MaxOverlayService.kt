@@ -590,36 +590,12 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
 
         try {
             val isTargeted = overlayMode == "targeted"
-<<<<<<< HEAD
 
             // CRITICAL FIX: Dữ liệu từ Flutter đã là Physical Pixels. TUYỆT ĐỐI KHÔNG nhân thêm density.
             val pxX = if (isTargeted) areaX else 0
             val pxY = if (isTargeted) areaY else 0
             val pxW = if (isTargeted && areaWidth > 0) areaWidth else WindowManager.LayoutParams.MATCH_PARENT
             val pxH = if (isTargeted && areaHeight > 0) areaHeight else WindowManager.LayoutParams.MATCH_PARENT
-=======
-            val density = resources.displayMetrics.density
-
-            // Lấy kích thước THẬT của màn hình vật lý (Bao phủ cả Status Bar & Nav Bar)
-            val realW: Int
-            val realH: Int
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val windowMetrics = windowManager.maximumWindowMetrics
-                realW = windowMetrics.bounds.width()
-                realH = windowMetrics.bounds.height()
-            } else {
-                val realMetrics = android.util.DisplayMetrics()
-                @Suppress("DEPRECATION")
-                windowManager.defaultDisplay.getRealMetrics(realMetrics)
-                realW = realMetrics.widthPixels
-                realH = realMetrics.heightPixels
-            }
-
-            val pxX = if (isTargeted) (areaX * density).toInt() else 0
-            val pxY = if (isTargeted) (areaY * density).toInt() else 0
-            val pxW = if (isTargeted && areaWidth > 0) (areaWidth * density).toInt() else realW
-            val pxH = if (isTargeted && areaHeight > 0) (areaHeight * density).toInt() else realH
->>>>>>> origin/main
 
             for (i in 0 until 2) {
                 val params = WindowManager.LayoutParams(
@@ -638,7 +614,6 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                         x = pxX
                         y = pxY
                     }
-<<<<<<< HEAD
 
                     // CRITICAL FIX: Ép tràn viền qua Tai thỏ/Camera đục lỗ
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
@@ -648,20 +623,11 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                         fitInsetsTypes = 0
                     }
-=======
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-                    }
->>>>>>> origin/main
                 }
 
                 val view = View(this).apply {
                     setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
                     alpha = 1f
-<<<<<<< HEAD
-=======
-                    // Đã xóa systemUiVisibility để bảo toàn quyền lực vẽ đè tối thượng của Accessibility Overlay
->>>>>>> origin/main
                 }
                 windowManager.addView(view, params)
                 overlayViews.add(view)
@@ -669,10 +635,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
             if (!isAnimationRunning && overlayViews.isNotEmpty()) {
                 overlayViews[0].postOnAnimation(vsyncRunnable)
             }
-<<<<<<< HEAD
             Log.d(TAG, "Max Shield created — 2 layers, TYPE_ACCESSIBILITY_OVERLAY")
-=======
->>>>>>> origin/main
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create Max Shield overlay: ${e.message}")
             removeOverlayView()
