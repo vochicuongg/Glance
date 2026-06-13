@@ -1,0 +1,130 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PERMISSIONS
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Draw overlay on top of all other apps (fallback for non-accessibility mode) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Request ignoring battery optimizations to keep service alive in background -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Prevent the system from killing our sensor-reading service -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Required for Standard mode: run as a foreground service when
+         Accessibility is not used (no auto-start by the system) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+    </queries>
+
+    <application
+        android:label="Glance"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:resizeableActivity="true">
+
+        <!-- ════════════════════════════════════════════════════════════════
+             MAIN ACTIVITY (Flutter Host)
+             ════════════════════════════════════════════════════════════════ -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize"
+            android:resizeableActivity="true">
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/TransparentTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
+        </activity>
+
+        <!-- ════════════════════════════════════════════════════════════════
+             MAX OVERLAY SERVICE (Accessibility Service — Maximum Mode)
+             Uses TYPE_ACCESSIBILITY_OVERLAY to bypass Android 12+
+             Untrusted Touch Blocker, allowing Alpha 242 (95% opacity)
+             with full touch pass-through via FLAG_NOT_TOUCHABLE.
+             ⚠️ Banking apps may refuse to run while this service is enabled.
+             ════════════════════════════════════════════════════════════════ -->
+        <service
+            android:name=".MaxOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_config" />
+        </service>
+
+        <!-- ════════════════════════════════════════════════════════════════
+             STANDARD OVERLAY SERVICE (Regular Foreground Service — Standard Mode)
+             Uses TYPE_APPLICATION_OVERLAY with Alpha capped at 204 (80%).
+             Only requires SYSTEM_ALERT_WINDOW — no Accessibility needed.
+             Banking apps work normally with this service.
+             ════════════════════════════════════════════════════════════════ -->
+        <service
+            android:name=".StandardOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Screen privacy overlay and sensor monitoring (standard mode)" />
+        </service>
+
+        <!-- ════════════════════════════════════════════════════════════════
+             QUICK SETTINGS TILE SERVICE
+             Adds a toggle tile in Android's Quick Settings panel to
+             start/stop the GlanceOverlayService without opening the app.
+             ════════════════════════════════════════════════════════════════ -->
+        <service
+            android:name=".GlanceQuickTileService"
+            android:label="@string/tile_label"
+            android:icon="@drawable/ic_tile_vector_logo"
+            android:exported="true"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Flutter embedding meta-data -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+
+    <!-- Required to query activities that can process text -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+</manifest>
