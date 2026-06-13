@@ -1,5 +1,9 @@
 # 🛡️ Glance — Premium Anti-Shoulder-Surfing Privacy Overlay
 
+<p align="center">
+  <img src="assets/glance-logo.png" alt="Glance Logo" width="220px">
+</p>
+
 [![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)](https://flutter.dev)
 [![Kotlin](https://img.shields.io/badge/kotlin-%237F52FF.svg?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
