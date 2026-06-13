@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -147,7 +149,12 @@ class _PermissionScreenState extends State<PermissionScreen>
   ///   1. AppLifecycleState.resumed triggers after system Settings close
   ///   2. Permission.request() completes asynchronously
   /// Both events can call this method simultaneously, causing UI duplication.
-  void _navigateForward() {
+  ///
+  /// **Dialog Visibility Fix:**
+  /// A 200ms delay after locking navigation ensures Flutter has enough time
+  /// to render the Permission screen UI after app resume, preventing the
+  /// Dialog from being invisible due to animation conflicts with system dialogs.
+  Future<void> _navigateForward() async {
     // ══════════════════════════════════════════════════════════════════════
     // CRITICAL: Guard against concurrent navigation attempts
     // ══════════════════════════════════════════════════════════════════════
@@ -156,14 +163,190 @@ class _PermissionScreenState extends State<PermissionScreen>
       return;
     }
 
-    // Lock the navigation gate
+    // ──────────────────────────────────────────────────────────────────────
+    // Step 1: Lock the navigation gate
+    // ──────────────────────────────────────────────────────────────────────
     _isNavigating = true;
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Step 2: Wait for UI to render after app resume
+    // ──────────────────────────────────────────────────────────────────────
+    // When app returns from Settings, Flutter Engine needs ~1-2 frames to
+    // complete UI rendering. This 200ms delay ensures the Permission screen
+    // context is fully ready before showing Dialog.
+    await Future.delayed(const Duration(milliseconds: 200));
+    
+    // Safety check: widget may have been disposed during delay
+    if (!mounted) return;
 
     if (widget.fromSettings) {
       // Coming from Settings → pop back so SettingsScreen can re-check
       Navigator.of(context).pop();
     } else {
-      // Onboarding flow → replace with Dashboard
+      // ═══════════════════════════════════════════════════════════════════
+      // Step 3: Show success Dialog with dynamic mode name
+      // ═══════════════════════════════════════════════════════════════════
+      final strings = LocaleProvider.stringsOf(context);
+      final colorScheme = Theme.of(context).colorScheme;
+      
+      // Translate the current mode name dynamically
+      final modeName = _protectionMode == 'standard'
+          ? strings.modeStandardName
+          : strings.modeMaxName;
+      
+      // Build the success message with the translated mode name
+      final successMessage = strings.setupSuccessDynamic.replaceFirst('%s', modeName);
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // Luxury Glassmorphism Success Dialog — Premium Financial/Security UX
+      // ═══════════════════════════════════════════════════════════════════
+      showDialog(
+        context: context,
+        barrierDismissible: false, // Prevent dismissal by tapping outside
+        builder: (dialogContext) => Dialog(
+          // ── 1. Glassmorphism Foundation ────────────────────────────────
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(32),
+          ),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+            child: Container(
+              // ── 2. Luxury Container with Gold Accent Border ─────────────
+              decoration: BoxDecoration(
+                color: const Color(0xFF121212).withOpacity(0.7),
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(
+                  color: const Color(0xFFD4AF37).withOpacity(0.3),
+                  width: 1,
+                ),
+                boxShadow: [
+                  // Glowing gold shadow for premium feel
+                  BoxShadow(
+                    color: const Color(0xFFD4AF37).withOpacity(0.15),
+                    blurRadius: 40,
+                    spreadRadius: 8,
+                    offset: const Offset(0, 10),
+                  ),
+                  // Deep black shadow for depth
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── 3. Animated Premium Icon ─────────────────────────────
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.elasticOut,
+                    builder: (context, scale, child) {
+                      return Transform.scale(
+                        scale: scale,
+                        child: child,
+                      );
+                    },
+                    child: Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFFD4AF37).withOpacity(0.2),
+                            const Color(0xFFFFF4CC).withOpacity(0.1),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: Border.all(
+                          color: const Color(0xFFD4AF37).withOpacity(0.5),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFD4AF37).withOpacity(0.3),
+                            blurRadius: 24,
+                            spreadRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.verified_user,
+                        color: Color(0xFFD4AF37),
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // ── 4. Title Typography (Bold & Elegant) ─────────────────
+                  Text(
+                    strings.setupComplete ?? 'Hoàn tất',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black45,
+                          offset: Offset(0, 2),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // ── 5. Subtitle Typography (Light & Refined) ─────────────
+                  Text(
+                    successMessage,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.grey[400],
+                      height: 1.5,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // Step 4: Wait for user to read the notification (auto-dismiss)
+      // ═══════════════════════════════════════════════════════════════════
+      await Future.delayed(const Duration(milliseconds: 1500));
+      
+      // Safety check: widget may have been disposed during delay
+      if (!mounted) return;
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // Step 5: Close Dialog safely using root navigator
+      // ═══════════════════════════════════════════════════════════════════
+      Navigator.of(context, rootNavigator: true).pop();
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // Step 6: Navigate to Dashboard
+      // ═══════════════════════════════════════════════════════════════════
+      // Safety check before navigation
+      if (!mounted) return;
+      
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );

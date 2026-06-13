@@ -195,6 +195,12 @@ class LocalizedStrings {
   final String modeSelectionChangeInSettings;
   final String continueButton;
 
+  // ── Dynamic Setup Success Message (Permission Screen) ──────────────
+  final String modeStandardName;
+  final String modeMaxName;
+  final String setupSuccessDynamic;
+  final String setupComplete;
+
   const LocalizedStrings({
     required this.protectionActive,
     required this.protectionDisabled,
@@ -307,6 +313,10 @@ class LocalizedStrings {
     required this.modeSelectionNoDataCollected,
     required this.modeSelectionChangeInSettings,
     required this.continueButton,
+    required this.modeStandardName,
+    required this.modeMaxName,
+    required this.setupSuccessDynamic,
+    required this.setupComplete,
   });
 }
 
@@ -487,6 +497,12 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     modeSelectionNoDataCollected: '🛡️ Commited to NOT collecting any personal data.',
     modeSelectionChangeInSettings: '⚙️ Easily change protection mode in Settings.',
     continueButton: 'Continue',
+
+    // Dynamic Setup Success
+    modeStandardName: 'Standard Mode',
+    modeMaxName: 'Max Mode',
+    setupSuccessDynamic: 'Setup %s successful! Your shield is ready.',
+    setupComplete: 'Complete',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -658,6 +674,12 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     modeSelectionNoDataCollected: '🛡️ Cam kết KHÔNG thu thập bất kỳ dữ liệu cá nhân.',
     modeSelectionChangeInSettings: '⚙️ Thay đổi chế độ dễ dàng trong mục Cài đặt.',
     continueButton: 'Tiếp tục',
+
+    // Dynamic Setup Success
+    modeStandardName: 'Chế độ Tiêu chuẩn',
+    modeMaxName: 'Chế độ Tối đa',
+    setupSuccessDynamic: 'Thiết lập %s thành công! Lá chắn của bạn đã sẵn sàng.',
+    setupComplete: 'Hoàn tất',
   ),
 };
 
