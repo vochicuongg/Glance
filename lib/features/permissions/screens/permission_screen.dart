@@ -10,18 +10,24 @@ import '../../dashboard/screens/dashboard_screen.dart';
 import '../../onboarding/screens/mode_selection_screen.dart';
 
 /// ═══════════════════════════════════════════════════════════════════════════════
-/// PermissionScreen — Command Center Edition (Luxury Finance Style)
+/// PermissionScreen — Luxury Finance & Minimalist Edition
 /// ═══════════════════════════════════════════════════════════════════════════════
-/// Redesigned as a premium "Command Center" with glassmorphism permission blocks,
-/// deep dark theme (#0A0A0A), and Gold accent (#D4AF37).
-///
-/// Design Philosophy:
-///   • Background: Deep black for luxury vault feel
-///   • Permission Tiles: Glassmorphism blocks with backdrop blur
-///   • Icons: Gold-accented circular badges
-///   • Buttons: Custom styled (no Android switches) - Gold when granted
-///   • Animations: Flash gold glow when permission granted
+/// Fully redesigned to match ModeSelectionScreen's design language:
+///   • Background: Deep black #0A0A0A with ambient gold radial gradient
+///   • Layout: Scaffold → SafeArea → SingleChildScrollView (unified scroll)
+///   • Permission Cards: AnimatedContainer with Glassmorphism, BackdropFilter
+///   • States: Gold glow border (granted) / thin grey border (pending)
+///   • Buttons: Custom GestureDetector — NO Android Switch widgets
+///   • Bottom CTA: Wide gold gradient button, enabled only when all granted
+///   • Animations: Flash gold glow on permission grant transitions
 /// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Design Tokens ────────────────────────────────────────────────────────────
+const _kBackgroundColor = Color(0xFF0A0A0A);
+const _kCardColor = Color(0xFF1A1A1A);
+const _kGoldAccent = Color(0xFFD4AF37);
+const _kGoldGradientEnd = Color(0xFFC9A961);
+
 class PermissionScreen extends StatefulWidget {
   final bool fromSettings;
 
@@ -84,14 +90,16 @@ class _PermissionScreenState extends State<PermissionScreen>
       _isLoading = false;
     });
 
-    List<String> missing = [];
-    if (_protectionMode == 'maximum' && !_hasAccessibility) missing.add('accessibility');
-    if (!_hasOverlay) missing.add('overlay');
-    if (!_hasBattery) missing.add('battery');
-
-    if (missing.isEmpty) {
+    if (_allRequiredPermissionsGranted) {
       _navigateForward();
     }
+  }
+
+  bool get _allRequiredPermissionsGranted {
+    if (_protectionMode == 'maximum' && !_hasAccessibility) return false;
+    if (!_hasOverlay) return false;
+    if (!_hasBattery) return false;
+    return true;
   }
 
   Future<void> _navigateForward() async {
@@ -108,14 +116,15 @@ class _PermissionScreenState extends State<PermissionScreen>
       final modeName = _protectionMode == 'standard'
           ? strings.modeStandardName
           : strings.modeMaxName;
-      final successMessage = strings.setupSuccessDynamic.replaceFirst('%s', modeName);
+      final successMessage =
+          strings.setupSuccessDynamic.replaceFirst('%s', modeName);
 
       await GlanceLuxuryDialog.show(
         context: context,
         title: strings.setupComplete,
         subtitle: successMessage,
         icon: Icons.verified_user,
-        accentColor: const Color(0xFFD4AF37),
+        accentColor: _kGoldAccent,
         autoClose: true,
       );
 
@@ -131,32 +140,35 @@ class _PermissionScreenState extends State<PermissionScreen>
   Widget build(BuildContext context) {
     final strings = LocaleProvider.stringsOf(context);
 
+    // ── Resolve light/dark early so loading states also adapt ─────────────
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final bgColor = isLight ? const Color(0xFFF8F9FA) : _kBackgroundColor;
+
+    // ── Loading State ──────────────────────────────────────────────────────
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: const Color(0xFF0A0A0A),
+        backgroundColor: bgColor,
         body: const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4AF37)),
+            valueColor: AlwaysStoppedAnimation<Color>(_kGoldAccent),
           ),
         ),
       );
     }
 
-    List<String> missingSteps = [];
-    if (_protectionMode == 'maximum' && !_hasAccessibility) missingSteps.add('accessibility');
-    if (!_hasOverlay) missingSteps.add('overlay');
-    if (!_hasBattery) missingSteps.add('battery');
-
-    if (missingSteps.isEmpty) {
+    // ── All Permissions Granted → show spinner while navigating ───────────
+    if (_allRequiredPermissionsGranted) {
       return Scaffold(
-        backgroundColor: const Color(0xFF0A0A0A),
+        backgroundColor: bgColor,
         body: const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4AF37)),
+            valueColor: AlwaysStoppedAnimation<Color>(_kGoldAccent),
           ),
         ),
       );
     }
+
+    // ── Main Permission UI ────────────────────────────────────────────────
 
     return PopScope(
       canPop: false,
@@ -171,136 +183,272 @@ class _PermissionScreenState extends State<PermissionScreen>
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0A0A),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF0A0A0A),
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            onPressed: () {
-              if (widget.fromSettings) {
-                Navigator.of(context).pop();
-              } else {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const ModeSelectionScreen(),
+        backgroundColor: bgColor,
+        body: Stack(
+          children: [
+            // ── Ambient Background Gradient (top-right) ────────────────
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 350,
+                height: 350,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: isLight
+                        ? [
+                            _kGoldAccent.withValues(alpha: 0.05),
+                            Colors.white.withValues(alpha: 0.0),
+                          ]
+                        : [
+                            _kGoldAccent.withValues(alpha: 0.07),
+                            Colors.transparent,
+                          ],
                   ),
-                );
-              }
-            },
-            icon: Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white.withValues(alpha: 0.6),
-              size: 20,
+                ),
+              ),
             ),
+
+            // ── Ambient Background Gradient (bottom-left) ─────────────
+            Positioned(
+              bottom: -150,
+              left: -150,
+              child: Container(
+                width: 400,
+                height: 400,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: isLight
+                        ? [
+                            _kGoldAccent.withValues(alpha: 0.03),
+                            Colors.white.withValues(alpha: 0.0),
+                          ]
+                        : [
+                            _kGoldAccent.withValues(alpha: 0.05),
+                            Colors.transparent,
+                          ],
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Unified Scroll Layout ─────────────────────────────────
+            SafeArea(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+
+                      // ── Back Button ─────────────────────────────────
+                      _buildBackButton(isLight),
+
+                      const SizedBox(height: 32),
+
+                      // ── Header ──────────────────────────────────────
+                      _buildHeader(strings, isLight),
+
+                      const SizedBox(height: 40),
+
+                      // ── Permission Cards ────────────────────────────
+                      if (_protectionMode == 'maximum') ...[
+                        _GlassmorphismPermissionCard(
+                          icon: Icons.accessibility_new_rounded,
+                          title: strings.permAccessibilityTitle,
+                          description:
+                              'Bảo vệ màn hình với lớp phủ đáng tin cậy',
+                          isGranted: _hasAccessibility,
+                          onTap: () =>
+                              GlanceChannelService.openAccessibilitySettings(),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      _GlassmorphismPermissionCard(
+                        icon: Icons.layers_rounded,
+                        title: strings.permOverlayTitle,
+                        description: 'Hiển thị lá chắn trên mọi ứng dụng',
+                        isGranted: _hasOverlay,
+                        onTap: () =>
+                            GlanceChannelService.openOverlaySettings(),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      _GlassmorphismPermissionCard(
+                        icon: Icons.battery_charging_full_rounded,
+                        title: strings.batteryPermissionTitle,
+                        description:
+                            'Duy trì bảo vệ liên tục ở chế độ nền',
+                        isGranted: _hasBattery,
+                        onTap: () async {
+                          await Permission.ignoreBatteryOptimizations.request();
+                          _checkPermissions();
+                        },
+                      ),
+
+                      // ── Bottom Action Spacer ────────────────────────
+                      const SizedBox(height: 80),
+
+                      // ── Bottom CTA Button ───────────────────────────
+                      _buildBottomActionButton(strings, isLight),
+
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Back Button ──────────────────────────────────────────────────────────
+  Widget _buildBackButton(bool isLight) {
+    return GestureDetector(
+      onTap: () {
+        if (widget.fromSettings) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const ModeSelectionScreen()),
+          );
+        }
+      },
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: isLight
+              ? Colors.black.withValues(alpha: 0.04)
+              : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isLight
+                ? Colors.black.withValues(alpha: 0.06)
+                : Colors.white.withValues(alpha: 0.08),
+            width: 0.5,
           ),
         ),
-        body: SafeArea(
-          child: Stack(
-            children: [
-              // ── Ambient Background Gradient ──────────────────────────────
-              Positioned(
-                bottom: -150,
-                left: -150,
-                child: Container(
-                  width: 400,
-                  height: 400,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        const Color(0xFFD4AF37).withValues(alpha: 0.08),
-                        Colors.transparent,
-                      ],
+        child: Icon(
+          Icons.arrow_back_ios_new_rounded,
+          color: isLight
+              ? const Color(0xFF666666)
+              : Colors.white.withValues(alpha: 0.6),
+          size: 18,
+        ),
+      ),
+    );
+  }
+
+  // ── Header Typography ────────────────────────────────────────────────────
+  Widget _buildHeader(dynamic strings, bool isLight) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Cấp phép Hoạt động',
+          style: TextStyle(
+            color: isLight ? const Color(0xFF121212) : Colors.white,
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Hệ thống cần được cấp phép để bảo vệ tài sản của bạn',
+          style: TextStyle(
+            color: isLight ? const Color(0xFF666666) : Colors.white.withValues(alpha: 0.45),
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Bottom CTA "XONG / VÀO ỨNG DỤNG" ───────────────────────────────────
+  Widget _buildBottomActionButton(dynamic strings, bool isLight) {
+    final isEnabled = _allRequiredPermissionsGranted;
+
+    return AnimatedOpacity(
+      opacity: isEnabled ? 1.0 : 0.3,
+      duration: const Duration(milliseconds: 400),
+      child: Container(
+        width: double.infinity,
+        height: 60,
+        decoration: BoxDecoration(
+          gradient: isEnabled
+              ? const LinearGradient(
+                  colors: [_kGoldAccent, _kGoldGradientEnd],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isEnabled
+              ? null
+              : isLight ? const Color(0xFFE0E0E0) : const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(16),
+          border: isEnabled
+              ? null
+              : Border.all(
+                  color: isLight
+                      ? Colors.black.withValues(alpha: 0.06)
+                      : Colors.white.withValues(alpha: 0.08),
+                  width: 0.5,
+                ),
+          boxShadow: isEnabled
+              ? [
+                  BoxShadow(
+                    color: _kGoldAccent.withValues(alpha: 0.4),
+                    blurRadius: 24,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isEnabled ? _navigateForward : null,
+            borderRadius: BorderRadius.circular(16),
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isEnabled)
+                    const Icon(
+                      Icons.verified_user_rounded,
+                      color: _kBackgroundColor,
+                      size: 20,
+                    ),
+                  if (isEnabled) const SizedBox(width: 10),
+                  Text(
+                    'VÀO ỨNG DỤNG',
+                    style: TextStyle(
+                      color: isEnabled
+                          ? _kBackgroundColor
+                          : isLight
+                              ? const Color(0xFF666666)
+                              : Colors.white.withValues(alpha: 0.3),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
                     ),
                   ),
-                ),
+                ],
               ),
-
-              // ── Main Content ─────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 24),
-
-                    // ── Header ───────────────────────────────────────────────
-                    Text(
-                      'THIẾT LẬP QUYỀN TRUY CẬP',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Hệ thống cần được cấp phép để bảo vệ tài sản của bạn',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 14,
-                        height: 1.4,
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    // ── Permission Blocks ────────────────────────────────────
-                    Expanded(
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Column(
-                          children: [
-                            // Accessibility (Maximum mode only)
-                            if (_protectionMode == 'maximum')
-                              _LuxuryPermissionBlock(
-                                icon: Icons.accessibility_new_rounded,
-                                title: strings.permAccessibilityTitle,
-                                description: 'Bảo vệ màn hình với lớp phủ đáng tin cậy',
-                                isGranted: _hasAccessibility,
-                                onTap: () => GlanceChannelService.openAccessibilitySettings(),
-                                onRefresh: _checkPermissions,
-                              ),
-
-                            if (_protectionMode == 'maximum')
-                              const SizedBox(height: 16),
-
-                            // Overlay Permission
-                            _LuxuryPermissionBlock(
-                              icon: Icons.layers_rounded,
-                              title: strings.permOverlayTitle,
-                              description: 'Hiển thị lá chắn trên mọi ứng dụng',
-                              isGranted: _hasOverlay,
-                              onTap: () => GlanceChannelService.openOverlaySettings(),
-                              onRefresh: _checkPermissions,
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Battery Permission
-                            _LuxuryPermissionBlock(
-                              icon: Icons.battery_charging_full_rounded,
-                              title: strings.batteryPermissionTitle,
-                              description: 'Duy trì bảo vệ liên tục ở chế độ nền',
-                              isGranted: _hasBattery,
-                              onTap: () async {
-                                await Permission.ignoreBatteryOptimizations.request();
-                                _checkPermissions();
-                              },
-                              onRefresh: _checkPermissions,
-                            ),
-
-                            const SizedBox(height: 24),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -309,37 +457,38 @@ class _PermissionScreenState extends State<PermissionScreen>
 }
 
 /// ═══════════════════════════════════════════════════════════════════════════════
-/// _LuxuryPermissionBlock — Command Center Setup Block
+/// _GlassmorphismPermissionCard — Core Permission Block Component
 /// ═══════════════════════════════════════════════════════════════════════════════
-/// Features:
-///   • Glassmorphism container with backdrop blur
-///   • Gold icon badge on the left
-///   • Custom button instead of Android switch
-///   • Flash gold animation when granted
-///   • Detailed reason for each permission
+/// Matches the VIP Credit Card design language from ModeSelectionScreen:
+///   • AnimatedContainer for smooth state transitions
+///   • ClipRRect + BackdropFilter for frosted glass effect
+///   • Rounded icon badge (48×48, circular(12))
+///   • Custom action button (NO Switch widget)
+///   • Gold glow border + boxShadow when granted
+///   • Flash animation on permission grant
 /// ═══════════════════════════════════════════════════════════════════════════════
-class _LuxuryPermissionBlock extends StatefulWidget {
+class _GlassmorphismPermissionCard extends StatefulWidget {
   final IconData icon;
   final String title;
   final String description;
   final bool isGranted;
   final VoidCallback onTap;
-  final VoidCallback onRefresh;
 
-  const _LuxuryPermissionBlock({
+  const _GlassmorphismPermissionCard({
     required this.icon,
     required this.title,
     required this.description,
     required this.isGranted,
     required this.onTap,
-    required this.onRefresh,
   });
 
   @override
-  State<_LuxuryPermissionBlock> createState() => _LuxuryPermissionBlockState();
+  State<_GlassmorphismPermissionCard> createState() =>
+      _GlassmorphismPermissionCardState();
 }
 
-class _LuxuryPermissionBlockState extends State<_LuxuryPermissionBlock>
+class _GlassmorphismPermissionCardState
+    extends State<_GlassmorphismPermissionCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _flashController;
   late Animation<double> _flashAnimation;
@@ -351,16 +500,17 @@ class _LuxuryPermissionBlockState extends State<_LuxuryPermissionBlock>
     _wasGranted = widget.isGranted;
     _flashController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 700),
     );
     _flashAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _flashController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _flashController, curve: Curves.easeOutCubic),
     );
   }
 
   @override
-  void didUpdateWidget(_LuxuryPermissionBlock oldWidget) {
+  void didUpdateWidget(_GlassmorphismPermissionCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Flash gold glow when permission transitions from denied → granted
     if (!_wasGranted && widget.isGranted) {
       _flashController.forward().then((_) => _flashController.reverse());
       _wasGranted = true;
@@ -375,164 +525,115 @@ class _LuxuryPermissionBlockState extends State<_LuxuryPermissionBlock>
 
   @override
   Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+
     return AnimatedBuilder(
       animation: _flashAnimation,
       builder: (context, child) {
         final flashValue = _flashAnimation.value;
-        return Container(
-          padding: const EdgeInsets.all(20),
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24.0),
             border: Border.all(
               color: widget.isGranted
                   ? Color.lerp(
-                      const Color(0xFFD4AF37),
-                      Colors.white.withValues(alpha: 0.1),
-                      1 - flashValue,
+                      _kGoldAccent.withValues(alpha: 0.8),
+                      Colors.white,
+                      flashValue * 0.3,
                     )!
-                  : Colors.white.withValues(alpha: 0.1),
-              width: widget.isGranted ? 2.0 : 1.0,
+                  : isLight
+                      ? Colors.black.withValues(alpha: 0.06)
+                      : Colors.white.withValues(alpha: 0.08),
+              width: widget.isGranted ? 1.0 : 0.5,
             ),
-            boxShadow: widget.isGranted && flashValue > 0
+            boxShadow: widget.isGranted
                 ? [
                     BoxShadow(
-                      color: const Color(0xFFD4AF37).withValues(alpha: 0.3 * flashValue),
-                      blurRadius: 20 * flashValue,
-                      spreadRadius: 2 * flashValue,
+                      color: _kGoldAccent.withValues(
+                        alpha: 0.15 + (0.25 * flashValue),
+                      ),
+                      spreadRadius: 2,
+                      blurRadius: 12 + (16 * flashValue),
                     ),
                   ]
-                : null,
+                : isLight
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 12,
+                          spreadRadius: 0,
+                        ),
+                      ]
+                    : null,
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(24.0),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20.0,
+                  vertical: 22.0,
+                ),
                 decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24.0),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      const Color(0xFF1A1A1A).withValues(alpha: 0.7),
-                      const Color(0xFF1A1A1A).withValues(alpha: 0.5),
-                    ],
+                    colors: widget.isGranted
+                        ? [
+                            isLight
+                                ? Colors.white.withValues(alpha: 0.85)
+                                : _kCardColor.withValues(alpha: 0.85),
+                            isLight
+                                ? Colors.white.withValues(alpha: 0.7)
+                                : const Color(0xFF222222).withValues(alpha: 0.7),
+                          ]
+                        : [
+                            isLight
+                                ? Colors.white.withValues(alpha: 0.6)
+                                : _kCardColor.withValues(alpha: 0.6),
+                            isLight
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : _kCardColor.withValues(alpha: 0.4),
+                          ],
                   ),
                 ),
                 child: Row(
                   children: [
-                    // ── Icon Badge ───────────────────────────────────────
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: widget.isGranted
-                            ? const Color(0xFFD4AF37).withValues(alpha: 0.15)
-                            : Colors.white.withValues(alpha: 0.05),
-                        border: Border.all(
-                          color: widget.isGranted
-                              ? const Color(0xFFD4AF37).withValues(alpha: 0.3)
-                              : Colors.white.withValues(alpha: 0.1),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Icon(
-                        widget.icon,
-                        size: 28,
-                        color: widget.isGranted
-                            ? const Color(0xFFD4AF37)
-                            : Colors.white.withValues(alpha: 0.4),
-                      ),
-                    ),
-
+                    _buildIconBadge(isLight),
                     const SizedBox(width: 16),
-
-                    // ── Text Content ─────────────────────────────────────
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             widget.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
+                            style: TextStyle(
+                              color: isLight ? const Color(0xFF121212) : Colors.white,
+                              fontSize: 16,
                               fontWeight: FontWeight.w600,
+                              height: 1.2,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 5),
                           Text(
                             widget.description,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              fontSize: 12,
+                              color: isLight ? const Color(0xFF666666) : Colors.white.withValues(alpha: 0.45),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
                               height: 1.4,
                             ),
                           ),
                         ],
                       ),
                     ),
-
                     const SizedBox(width: 12),
-
-                    // ── Action Button ────────────────────────────────────
-                    if (!widget.isGranted)
-                      GestureDetector(
-                        onTap: widget.onTap,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            'Cấp quyền',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.8),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      // Granted indicator
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD4AF37).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.check_circle_rounded,
-                              color: Color(0xFFD4AF37),
-                              size: 16,
-                            ),
-                            const SizedBox(width: 6),
-                            const Text(
-                              'Đã bật',
-                              style: TextStyle(
-                                color: Color(0xFFD4AF37),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    _buildActionButton(),
                   ],
                 ),
               ),
@@ -541,5 +642,111 @@ class _LuxuryPermissionBlockState extends State<_LuxuryPermissionBlock>
         );
       },
     );
+  }
+
+  Widget _buildIconBadge(bool isLight) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: widget.isGranted
+            ? _kGoldAccent.withValues(alpha: 0.15)
+            : isLight
+                ? Colors.black.withValues(alpha: 0.04)
+                : Colors.white.withValues(alpha: 0.05),
+        border: Border.all(
+          color: widget.isGranted
+              ? _kGoldAccent.withValues(alpha: 0.3)
+              : isLight
+                  ? Colors.black.withValues(alpha: 0.06)
+                  : Colors.white.withValues(alpha: 0.08),
+          width: 1,
+        ),
+      ),
+      child: Icon(
+        widget.icon,
+        size: 24,
+        color: widget.isGranted
+            ? _kGoldAccent
+            : isLight
+                ? const Color(0xFF666666)
+                : Colors.white.withValues(alpha: 0.35),
+      ),
+    );
+  }
+
+  /// Custom action button — replaces Android Switch entirely
+  /// • Pending: Outlined button with gold border, text "CẤP QUYỀN"
+  /// • Granted: Solid gold gradient button, text "ĐÃ BẬT" + check icon
+  Widget _buildActionButton() {
+    if (!widget.isGranted) {
+      // ── Outlined "CẤP QUYỀN" Button ──────────────────────────────
+      return GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _kGoldAccent.withValues(alpha: 0.7),
+              width: 1,
+            ),
+            color: Colors.transparent,
+          ),
+          child: const Text(
+            'CẤP QUYỀN',
+            style: TextStyle(
+              color: _kGoldAccent,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+      );
+    } else {
+      // ── Solid Gold "ĐÃ BẬT" Button ──────────────────────────────
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            colors: [_kGoldAccent, _kGoldGradientEnd],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _kGoldAccent.withValues(alpha: 0.25),
+              blurRadius: 8,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check_circle,
+              color: Color(0xFF0A0A0A),
+              size: 14,
+            ),
+            SizedBox(width: 5),
+            Text(
+              'ĐÃ BẬT',
+              style: TextStyle(
+                color: Color(0xFF0A0A0A),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }

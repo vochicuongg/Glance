@@ -86,10 +86,15 @@ class GlanceLuxuryDialog extends StatelessWidget {
     bool autoClose = true,
     List<Widget>? actions,
   }) async {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+
     // Show the dialog
     final resultFuture = showDialog<T>(
       context: context,
       barrierDismissible: false,
+      barrierColor: isLight
+          ? Colors.black.withValues(alpha: 0.15)
+          : Colors.black.withValues(alpha: 0.7),
       builder: (dialogContext) => GlanceLuxuryDialog(
         title: title,
         subtitle: subtitle,
@@ -114,6 +119,8 @@ class GlanceLuxuryDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+
     return Dialog(
       // ── Glassmorphism Foundation ────────────────────────────────────────
       backgroundColor: Colors.transparent,
@@ -126,16 +133,18 @@ class GlanceLuxuryDialog extends StatelessWidget {
         child: Container(
           // ── Luxury Container with Accent Border ─────────────────────────
           decoration: BoxDecoration(
-            color: const Color(0xFF121212).withValues(alpha: 0.7),
+            color: isLight
+                ? Colors.white.withValues(alpha: 0.9)
+                : const Color(0xFF121212).withValues(alpha: 0.7),
             borderRadius: BorderRadius.circular(32),
             border: Border.all(
-              color: accentColor.withValues(alpha: 0.3),
+              color: accentColor.withValues(alpha: isLight ? 0.5 : 0.3),
               width: 1,
             ),
             boxShadow: [
               // Glowing accent shadow for premium feel
               BoxShadow(
-                color: accentColor.withValues(alpha: 0.15),
+                color: accentColor.withValues(alpha: isLight ? 0.2 : 0.4),
                 blurRadius: 40,
                 spreadRadius: 8,
                 offset: const Offset(0, 10),
@@ -162,12 +171,14 @@ class GlanceLuxuryDialog extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: isLight
+                      ? const Color(0xFF121212)
+                      : Colors.white,
                   letterSpacing: 0.5,
-                  shadows: [
+                  shadows: const [
                     Shadow(
                       color: Colors.black45,
                       offset: Offset(0, 2),
@@ -186,7 +197,9 @@ class GlanceLuxuryDialog extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w400,
-                  color: Colors.grey[400],
+                  color: isLight
+                      ? const Color(0xFF666666)
+                      : Colors.grey[400],
                   height: 1.5,
                   letterSpacing: 0.2,
                 ),

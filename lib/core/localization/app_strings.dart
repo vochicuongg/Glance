@@ -180,6 +180,8 @@ class LocalizedStrings {
   final String copyButton;
 
   // ── Mode Selection Screen (Onboarding) ─────────────────────────────
+  final String brandName;
+  final String brandSubtitle;
   final String chooseProtectionModeTitle;
   final String modeRecommendPayment;
   final String modeMaxProtection;
@@ -299,6 +301,8 @@ class LocalizedStrings {
     required this.supportDev,
     required this.copySuccess,
     required this.copyButton,
+    required this.brandName,
+    required this.brandSubtitle,
     required this.chooseProtectionModeTitle,
     required this.modeRecommendPayment,
     required this.modeMaxProtection,
@@ -483,6 +487,8 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     copyButton: 'Copy',
 
     // Mode Selection Screen (Onboarding)
+    brandName: 'GLANCE',
+    brandSubtitle: 'Choose your protection level',
     chooseProtectionModeTitle: 'Choose suitable protection mode',
     modeRecommendPayment: 'Recommended for Payment',
     modeMaxProtection: 'Maximum Protection',
@@ -660,6 +666,8 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     copyButton: 'Sao chép',
 
     // Mode Selection Screen (Onboarding)
+    brandName: 'GLANCE',
+    brandSubtitle: 'Chọn cấp độ bảo vệ của bạn',
     chooseProtectionModeTitle: 'Chọn chế độ bảo vệ phù hợp',
     modeRecommendPayment: 'Khuyên dùng khi Thanh toán',
     modeMaxProtection: 'Bảo vệ Toàn diện',

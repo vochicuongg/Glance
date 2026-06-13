@@ -70,110 +70,115 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
   @override
   Widget build(BuildContext context) {
     final strings = LocaleProvider.stringsOf(context);
-    final screenHeight = MediaQuery.of(context).size.height;
+    final isLight = Theme.of(context).brightness == Brightness.light;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A), // Deep black
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Stack(
-            children: [
-              // ── Ambient Background Gradient ──────────────────────────────
-              Positioned(
-                top: -100,
-                right: -100,
-                child: Container(
-                  width: 300,
-                  height: 300,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        const Color(0xFFD4AF37).withValues(alpha: 0.08),
-                        Colors.transparent,
-                      ],
-                    ),
+      backgroundColor: isLight ? const Color(0xFFF8F9FA) : const Color(0xFF0A0A0A),
+      body: Stack(
+        children: [
+          // ── Ambient Background Gradient (Fixed Position) ────────────────
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: isLight
+                      ? [
+                          const Color(0xFFD4AF37).withValues(alpha: 0.05),
+                          Colors.white.withValues(alpha: 0.0),
+                        ]
+                      : [
+                          const Color(0xFFD4AF37).withValues(alpha: 0.08),
+                          Colors.transparent,
+                        ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Unified Scroll Layout (Header + Cards + Notice) ─────────────
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Column(
+                    children: [
+                      // ── Top Safe Space ─────────────────────────────────────
+                      const SizedBox(height: 56),
+
+                      // ── Header: Shield Icon + Title ────────────────────────
+                      _buildHeader(strings, isLight),
+
+                      const SizedBox(height: 32),
+
+                      // ── Standard Mode VIP Card ─────────────────────────────
+                      _LuxuryModeCard(
+                        isSelected: _selectedMode == 'standard',
+                        onTap: () =>
+                            setState(() => _selectedMode = 'standard'),
+                        icon: Icons.verified_user_rounded,
+                        badge: strings.modeRecommendPayment,
+                        title: strings.standardMode,
+                        features: [
+                          strings.modeStandardFeature1,
+                          strings.modeStandardFeature2,
+                          strings.modeStandardFeature3,
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // ── Maximum Mode VIP Card ──────────────────────────────
+                      _LuxuryModeCard(
+                        isSelected: _selectedMode == 'maximum',
+                        onTap: () =>
+                            setState(() => _selectedMode = 'maximum'),
+                        icon: Icons.security_rounded,
+                        badge: strings.modeMaxProtection,
+                        title: strings.maximumMode,
+                        features: [
+                          strings.modeMaxFeature1,
+                          strings.modeMaxFeature2,
+                          strings.modeMaxFeature3,
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // ── Informational Notice ───────────────────────────────
+                      _buildInfoNotice(strings, isLight),
+
+                      // ── Bottom Safe Space (for floating button) ────────────
+                      const SizedBox(height: 120),
+                    ],
                   ),
                 ),
               ),
-
-              // ── Main Content ─────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 56),
-
-                    // ── Header: Shield Icon + Title ──────────────────────────
-                    _buildHeader(strings),
-
-                    SizedBox(height: screenHeight * 0.06),
-
-                    // ── VIP Card Mode Selection ──────────────────────────────
-                    Expanded(
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Column(
-                          children: [
-                            // ── Standard Mode VIP Card ───────────────────────
-                            _LuxuryModeCard(
-                              isSelected: _selectedMode == 'standard',
-                              onTap: () =>
-                                  setState(() => _selectedMode = 'standard'),
-                              icon: Icons.verified_user_rounded,
-                              badge: strings.modeRecommendPayment,
-                              title: strings.standardMode,
-                              features: [
-                                strings.modeStandardFeature1,
-                                strings.modeStandardFeature2,
-                                strings.modeStandardFeature3,
-                              ],
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            // ── Maximum Mode VIP Card ────────────────────────
-                            _LuxuryModeCard(
-                              isSelected: _selectedMode == 'maximum',
-                              onTap: () =>
-                                  setState(() => _selectedMode = 'maximum'),
-                              icon: Icons.security_rounded,
-                              badge: strings.modeMaxProtection,
-                              title: strings.maximumMode,
-                              features: [
-                                strings.modeMaxFeature1,
-                                strings.modeMaxFeature2,
-                                strings.modeMaxFeature3,
-                              ],
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // ── Informational Notice ─────────────────────────
-                            _buildInfoNotice(strings),
-
-                            const SizedBox(height: 20),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // ── Gold Activation Button ───────────────────────────────
-                    _buildActivationButton(strings),
-
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-            ],
+            ),
+          ),
+        ],
+      ),
+      // ── Floating Activation Button (bottomNavigationBar) ─────────────────
+      bottomNavigationBar: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            child: _buildActivationButton(strings, isLight),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader(LocalizedStrings strings) {
+  Widget _buildHeader(LocalizedStrings strings, bool isLight) {
     return Column(
       children: [
         // Shield Icon with Gold Glow
@@ -203,25 +208,32 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
           ),
         ),
         const SizedBox(height: 24),
-        // Title
+        // Brand Title - GLANCE
         Text(
-          'LÁ CHẮN BẢO MẬT',
+          strings.brandName,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.5,
+          style: TextStyle(
+            color: isLight ? const Color(0xFF121212) : Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 3.0,
             height: 1.3,
+            shadows: [
+              Shadow(
+                color: const Color(0xFFD4AF37).withValues(alpha: 0.5),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
         // Subtitle
         Text(
-          'Chọn cấp độ bảo vệ của bạn',
+          strings.brandSubtitle,
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.5),
+            color: isLight ? const Color(0xFF666666) : Colors.white.withValues(alpha: 0.5),
             fontSize: 14,
             fontWeight: FontWeight.w400,
             letterSpacing: 0.3,
@@ -231,14 +243,18 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
     );
   }
 
-  Widget _buildInfoNotice(LocalizedStrings strings) {
+  Widget _buildInfoNotice(LocalizedStrings strings, bool isLight) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A).withValues(alpha: 0.5),
+        color: isLight
+            ? Colors.white.withValues(alpha: 0.7)
+            : const Color(0xFF1A1A1A).withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.05),
+          color: isLight
+              ? Colors.black.withValues(alpha: 0.06)
+              : Colors.white.withValues(alpha: 0.05),
           width: 1,
         ),
       ),
@@ -248,7 +264,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
           Text(
             strings.modeSelectionWarningTitle,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
+              color: isLight ? const Color(0xFF121212) : Colors.white.withValues(alpha: 0.6),
               fontSize: 11,
               fontWeight: FontWeight.w600,
               height: 1.5,
@@ -258,17 +274,18 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
           _buildNoticeLine(
             strings.modeSelectionRecommendStandard
                 .replaceFirst('%s', strings.standardMode),
+            isLight,
           ),
           const SizedBox(height: 6),
-          _buildNoticeLine(strings.modeSelectionNoDataCollected),
+          _buildNoticeLine(strings.modeSelectionNoDataCollected, isLight),
           const SizedBox(height: 6),
-          _buildNoticeLine(strings.modeSelectionChangeInSettings),
+          _buildNoticeLine(strings.modeSelectionChangeInSettings, isLight),
         ],
       ),
     );
   }
 
-  Widget _buildNoticeLine(String text) {
+  Widget _buildNoticeLine(String text, bool isLight) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -277,7 +294,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
           child: Icon(
             Icons.circle,
             size: 4,
-            color: Colors.white.withValues(alpha: 0.4),
+            color: isLight ? const Color(0xFF666666) : Colors.white.withValues(alpha: 0.4),
           ),
         ),
         const SizedBox(width: 8),
@@ -285,7 +302,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
           child: Text(
             text,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: isLight ? const Color(0xFF666666) : Colors.white.withValues(alpha: 0.5),
               fontSize: 11,
               height: 1.5,
               fontStyle: FontStyle.italic,
@@ -296,7 +313,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
     );
   }
 
-  Widget _buildActivationButton(LocalizedStrings strings) {
+  Widget _buildActivationButton(LocalizedStrings strings, bool isLight) {
     final isEnabled = _selectedMode != null;
 
     return AnimatedOpacity(
@@ -313,7 +330,9 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                   end: Alignment.bottomRight,
                 )
               : null,
-          color: isEnabled ? null : const Color(0xFF2A2A2A),
+          color: isEnabled
+              ? null
+              : isLight ? const Color(0xFFE0E0E0) : const Color(0xFF2A2A2A),
           borderRadius: BorderRadius.circular(16),
           boxShadow: isEnabled
               ? [
@@ -334,7 +353,11 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
               child: Text(
                 'KÍCH HOẠT LÁ CHẮN',
                 style: TextStyle(
-                  color: isEnabled ? const Color(0xFF0A0A0A) : Colors.white.withValues(alpha: 0.3),
+                  color: isEnabled
+                      ? const Color(0xFF0A0A0A)
+                      : isLight
+                          ? const Color(0xFF666666)
+                          : Colors.white.withValues(alpha: 0.3),
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.2,
@@ -384,6 +407,8 @@ class _LuxuryModeCardState extends State<_LuxuryModeCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) {
@@ -393,152 +418,178 @@ class _LuxuryModeCardState extends State<_LuxuryModeCard> {
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
         scale: widget.isSelected
-            ? (_isPressed ? 1.03 : 1.05)
-            : (_isPressed ? 0.98 : 1.0),
-        duration: const Duration(milliseconds: 200),
+            ? (_isPressed ? 0.98 : 1.0)
+            : (_isPressed ? 0.93 : 0.95),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
         child: AnimatedOpacity(
-          opacity: widget.isSelected ? 1.0 : 0.5,
+          opacity: widget.isSelected ? 1.0 : (isLight ? 0.55 : 0.4),
           duration: const Duration(milliseconds: 300),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: widget.isSelected
-                    ? const Color(0xFFD4AF37)
-                    : Colors.white.withValues(alpha: 0.1),
-                width: widget.isSelected ? 2.0 : 1.0,
-              ),
-              boxShadow: widget.isSelected
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFFD4AF37).withValues(alpha: 0.3),
-                        blurRadius: 24,
-                        spreadRadius: 2,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: widget.isSelected
-                          ? [
-                              const Color(0xFF1A1A1A).withValues(alpha: 0.9),
-                              const Color(0xFF2A2A2A).withValues(alpha: 0.8),
-                            ]
-                          : [
-                              const Color(0xFF1A1A1A).withValues(alpha: 0.6),
-                              const Color(0xFF1A1A1A).withValues(alpha: 0.4),
-                            ],
-                    ),
+          curve: Curves.easeOutCubic,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: widget.isSelected
+                        ? [
+                            isLight
+                                ? Colors.white.withValues(alpha: 0.85)
+                                : const Color(0xFF1A1A1A).withValues(alpha: 0.9),
+                            isLight
+                                ? Colors.white.withValues(alpha: 0.7)
+                                : const Color(0xFF2A2A2A).withValues(alpha: 0.8),
+                          ]
+                        : [
+                            isLight
+                                ? Colors.white.withValues(alpha: 0.6)
+                                : const Color(0xFF1A1A1A).withValues(alpha: 0.6),
+                            isLight
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : const Color(0xFF1A1A1A).withValues(alpha: 0.4),
+                          ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── Header Row: Icon + Badge ─────────────────────────
-                      Row(
-                        children: [
-                          // Icon Circle
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: widget.isSelected
-                                  ? const Color(0xFFD4AF37).withValues(alpha: 0.15)
-                                  : Colors.white.withValues(alpha: 0.05),
-                            ),
-                            child: Icon(
-                              widget.icon,
-                              size: 28,
-                              color: widget.isSelected
-                                  ? const Color(0xFFD4AF37)
-                                  : Colors.white.withValues(alpha: 0.4),
-                            ),
+                  border: Border.all(
+                    color: widget.isSelected
+                        ? const Color(0xFFD4AF37)
+                        : isLight
+                            ? Colors.black.withValues(alpha: 0.12)
+                            : Colors.white.withValues(alpha: 0.1),
+                    width: widget.isSelected ? 1.0 : 1.0,
+                  ),
+                  boxShadow: widget.isSelected
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFFD4AF37)
+                                .withValues(alpha: isLight ? 0.35 : 0.25),
+                            blurRadius: 24,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 8),
                           ),
-                          const Spacer(),
-                          // Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: widget.isSelected
-                                  ? const Color(0xFFD4AF37).withValues(alpha: 0.2)
-                                  : Colors.white.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              widget.badge,
-                              style: TextStyle(
-                                color: widget.isSelected
-                                    ? const Color(0xFFD4AF37)
-                                    : Colors.white.withValues(alpha: 0.4),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
+                        ]
+                      : [
+                          BoxShadow(
+                            color: isLight
+                                ? Colors.black.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.3),
+                            blurRadius: isLight ? 20 : 16,
+                            spreadRadius: isLight ? 2 : 1,
+                            offset: Offset(0, isLight ? 8 : 6),
                           ),
                         ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Header Row: Icon + Badge ─────────────────────────
+                    Row(
+                      children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: widget.isSelected
+                                ? const Color(0xFFD4AF37).withValues(alpha: 0.15)
+                                : isLight
+                                    ? Colors.black.withValues(alpha: 0.04)
+                                    : Colors.white.withValues(alpha: 0.05),
+                          ),
+                          child: Icon(
+                            widget.icon,
+                            size: 28,
+                            color: widget.isSelected
+                                ? const Color(0xFFD4AF37)
+                                : isLight
+                                    ? const Color(0xFF666666)
+                                    : Colors.white.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: widget.isSelected
+                                ? const Color(0xFFD4AF37).withValues(alpha: 0.2)
+                                : isLight
+                                    ? Colors.black.withValues(alpha: 0.04)
+                                    : Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            widget.badge,
+                            style: TextStyle(
+                              color: widget.isSelected
+                                  ? const Color(0xFFD4AF37)
+                                  : isLight
+                                      ? const Color(0xFF666666)
+                                      : Colors.white.withValues(alpha: 0.4),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    // ── Mode Title ───────────────────────────────────────
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        color: isLight ? const Color(0xFF121212) : Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
                       ),
-
-                      const SizedBox(height: 20),
-
-                      // ── Mode Title ───────────────────────────────────────
-                      Text(
-                        widget.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
+                    ),
+                    const SizedBox(height: 16),
+                    // ── Feature List ─────────────────────────────────────
+                    ...widget.features.map(
+                      (feature) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Icon(
+                                Icons.check_circle_rounded,
+                                size: 16,
+                                color: widget.isSelected
+                                    ? const Color(0xFFD4AF37)
+                                    : isLight
+                                        ? const Color(0xFF666666)
+                                        : Colors.white.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                feature,
+                                style: TextStyle(
+                                  color: isLight
+                                      ? const Color(0xFF666666)
+                                      : Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 12,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-
-                      const SizedBox(height: 16),
-
-                      // ── Feature List ─────────────────────────────────────
-                      ...widget.features.map((feature) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Icon(
-                                    Icons.check_circle_rounded,
-                                    size: 16,
-                                    color: widget.isSelected
-                                        ? const Color(0xFFD4AF37)
-                                        : Colors.white.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    feature,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.7),
-                                      fontSize: 12,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

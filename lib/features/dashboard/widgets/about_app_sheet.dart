@@ -145,10 +145,10 @@ class AboutAppSheet extends StatelessWidget {
                           _buildInfoRow(
                             context,
                             icon: Icons.language_rounded,
-                            label: 'vochicuong.id.vn',
+                            label: 'vochicuong.is-a.dev',
                             onTap: () async {
                               try {
-                                final Uri url = Uri.parse('https://vochicuong.id.vn');
+                                final Uri url = Uri.parse('https://vochicuong.is-a.dev');
                                 await launchUrl(url, mode: LaunchMode.externalApplication);
                               } catch (_) {}
                             },
