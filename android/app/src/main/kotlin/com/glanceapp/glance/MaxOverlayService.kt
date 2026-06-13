@@ -578,14 +578,7 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
      * Uses 2 layers (Dual Shield) with standard View background color.
      */
     private fun createOverlayView() {
-<<<<<<< HEAD
-        // Load the latest configuration from SharedPreferences to ensure we use
-        // the most recent overlay mode and targeted area values before creating
-        // the overlay. This prevents race conditions where the broadcast is
-        // received before the service has reloaded the prefs.
-        loadSavedConfig()
-=======
->>>>>>> origin/main
+
         if (overlayViews.isNotEmpty()) return
 
         try {

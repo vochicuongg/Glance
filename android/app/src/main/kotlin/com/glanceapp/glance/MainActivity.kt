@@ -2,6 +2,7 @@ package com.glanceapp.glance
 
 import android.content.Context
 import android.content.Intent
+import android.content.ComponentName
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -39,8 +40,6 @@ class MainActivity : FlutterActivity() {
         /// EventChannel name for real-time sensor data streaming to Flutter.
         private const val SENSOR_STREAM_CHANNEL = "com.glanceapp.glance/sensor_stream"
 
-        /// Request code for the accessibility settings intent result.
-        private const val ACCESSIBILITY_SETTINGS_REQUEST = 1002
     }
 
     override fun getBackgroundMode(): BackgroundMode {
@@ -49,9 +48,6 @@ class MainActivity : FlutterActivity() {
 
     private var methodChannel: MethodChannel? = null
     private var sensorEventChannel: EventChannel? = null
-
-    /// Pending MethodChannel result to resolve after accessibility grant.
-    private var pendingResult: MethodChannel.Result? = null
 
     private var pendingShowModeSelectionMenu = false
 
@@ -178,7 +174,9 @@ class MainActivity : FlutterActivity() {
                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:${packageName}")
                     ).apply {
+                        // Ensure the Settings activity does not stay in back‑stack
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
                     }
                     startActivity(intent)
                     result.success(true)
@@ -298,7 +296,9 @@ class MainActivity : FlutterActivity() {
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:${packageName}")
                 ).apply {
+                    // Prevent Settings activity from remaining in back stack
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
                 }
                 startActivity(intent)
                 result.error(
@@ -340,8 +340,8 @@ class MainActivity : FlutterActivity() {
 
         // Not enabled — guide user to Accessibility Settings
         Log.d(TAG, "Max mode — Accessibility not enabled, opening settings...")
-        pendingResult = result
         openAccessibilitySettings()
+        result.success(true)
     }
 
     /**
@@ -403,17 +403,10 @@ class MainActivity : FlutterActivity() {
      * Sends the overlay mode via broadcast to the running service.
      */
     private fun handleSetOverlayMode(mode: String, result: MethodChannel.Result) {
-<<<<<<< HEAD
-        // Save the selected overlay mode to shared preferences BEFORE broadcasting.
-        // This ensures the native services can read the latest value even if they
-        // process the broadcast before the preferences are persisted.
         val nativePrefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
         nativePrefs.edit()
             .putString("overlay_mode", mode)
             .apply()
-
-=======
->>>>>>> origin/main
         sendBroadcast(Intent(MaxOverlayService.ACTION_SET_OVERLAY_MODE).apply {
             setPackage(packageName)
             putExtra(MaxOverlayService.EXTRA_MODE, mode)
@@ -436,7 +429,6 @@ class MainActivity : FlutterActivity() {
         height: Int,
         result: MethodChannel.Result
     ) {
-<<<<<<< HEAD
         // Persist the targeted area coordinates to shared preferences BEFORE broadcasting.
         // The overlay services load these values from the same prefs in loadSavedConfig().
         val nativePrefs = getSharedPreferences("GlanceNativePrefs", Context.MODE_PRIVATE)
@@ -447,8 +439,6 @@ class MainActivity : FlutterActivity() {
             .putInt("area_height", height)
             .apply()
 
-=======
->>>>>>> origin/main
         sendBroadcast(Intent(MaxOverlayService.ACTION_SET_TARGETED_AREA).apply {
             setPackage(packageName)
             putExtra(MaxOverlayService.EXTRA_AREA_X, x)
@@ -531,12 +521,31 @@ class MainActivity : FlutterActivity() {
     /**
      * Opens the Android Accessibility Settings screen so the user can
      * enable/disable the MaxOverlayService.
+     *
+     * Uses NO_HISTORY flag to prevent Settings from creating synthetic back stack.
      */
     private fun openAccessibilitySettings() {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                
+                // Deep-link nhảy thẳng vào trang cấu hình Trợ năng của Glance
+                val componentName = android.content.ComponentName(packageName, MaxOverlayService::class.java.name).flattenToString()
+                putExtra(":settings:fragment_args_key", componentName)
+                putExtra(":settings:show_fragment_args", android.os.Bundle().apply {
+                    putString(":settings:fragment_args_key", componentName)
+                })
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Deep-link Accessibility failed, falling back to default.", e)
+            val fallbackIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(fallbackIntent)
         }
-        startActivityForResult(intent, ACCESSIBILITY_SETTINGS_REQUEST)
     }
 
     private fun openAppDetails() {
@@ -544,7 +553,9 @@ class MainActivity : FlutterActivity() {
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.parse("package:$packageName")
         ).apply {
+            // Prevent the details screen from lingering in the back stack
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
         }
         startActivity(intent)
     }
@@ -563,24 +574,5 @@ class MainActivity : FlutterActivity() {
         pendingShowModeSelectionMenu = false
         channel.invokeMethod("showModeSelectionMenu", null)
         Log.d(TAG, "QS_TILE_PREFERENCES — requested Flutter mode menu")
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (requestCode == ACCESSIBILITY_SETTINGS_REQUEST) {
-            if (isAccessibilityServiceEnabled(this, MaxOverlayService::class.java)) {
-                pendingResult?.success(true)
-                Log.d(TAG, "Accessibility service enabled by user")
-            } else {
-                pendingResult?.error(
-                    "ACCESSIBILITY_NOT_ENABLED",
-                    "Please enable Glance in Accessibility Settings to protect your screen.",
-                    null
-                )
-                Log.w(TAG, "Accessibility service not enabled by user")
-            }
-            pendingResult = null
-        }
     }
 }

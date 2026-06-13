@@ -3,6 +3,7 @@ package com.glanceapp.glance
 
 import android.content.Context
 import android.content.Intent
+import android.content.ComponentName
 import android.os.Build
 import android.provider.Settings
 import android.service.quicksettings.Tile
@@ -124,7 +125,14 @@ class GlanceQuickTileService : TileService() {
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     android.net.Uri.parse("package:${packageName}")
                 ).apply {
+                    // Prevent the Settings activity from being added to back stack
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+                    // Deep‑link to the Glance accessibility switch fragment
+                    val component = ComponentName(this@GlanceQuickTileService, MaxOverlayService::class.java)
+                    setComponent(component)
+                    putExtra(":settings:fragment_args_key", MaxOverlayService::class.java.name)
+                    putExtra(":settings:show_fragment_args", true)
                 }
                 startActivityAndCollapse(settingsIntent)
                 return
@@ -161,7 +169,14 @@ class GlanceQuickTileService : TileService() {
                 getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
                     .edit().putBoolean("flutter.isActive", false).apply()
                 val settingsIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                    // Prevent the Settings activity from being added to back stack
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+                    // Deep‑link to the Glance accessibility switch fragment
+                    val component = ComponentName(this@GlanceQuickTileService, MaxOverlayService::class.java)
+                    setComponent(component)
+                    putExtra(":settings:fragment_args_key", MaxOverlayService::class.java.name)
+                    putExtra(":settings:show_fragment_args", true)
                 }
                 startActivityAndCollapse(settingsIntent)
             }

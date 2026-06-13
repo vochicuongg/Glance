@@ -591,6 +591,9 @@ class StandardOverlayService : Service(), SensorEventListener {
     /**
      * Applies alpha value to all overlay views by setting background color.
      */
+    /**
+     * Applies alpha value to all overlay views by setting background color.
+     */
     private fun applyAlphaToOverlay(alpha: Int) {
         if (overlayViews.isEmpty()) return
         val safeAlpha = alpha.coerceIn(0, MAX_ALPHA)
@@ -605,22 +608,14 @@ class StandardOverlayService : Service(), SensorEventListener {
      * Standard View with background color controlled by applyAlphaToOverlay.
      */
     private fun createOverlayView() {
-<<<<<<< HEAD
-        // Ensure we have the latest configuration from SharedPreferences before
-        // constructing the overlay. This guards against race conditions where the
-        // broadcast is received but the service hasn't reloaded the prefs yet.
-        loadSavedConfig()
-=======
->>>>>>> origin/main
         if (overlayViews.isNotEmpty()) return
         val wm = windowManager ?: return
 
         try {
+            loadSavedConfig()
+
             val isTargeted = overlayMode == "targeted"
 
-            // CRITICAL FIX: Dữ liệu từ Flutter đã là Physical Pixels. TUYỆT ĐỐI KHÔNG nhân thêm density.
-            val pxX = if (isTargeted) areaX else 0
-            val pxY = if (isTargeted) areaY else 0
             val pxW = if (isTargeted && areaWidth > 0) areaWidth else WindowManager.LayoutParams.MATCH_PARENT
             val pxH = if (isTargeted && areaHeight > 0) areaHeight else WindowManager.LayoutParams.MATCH_PARENT
 
@@ -637,16 +632,14 @@ class StandardOverlayService : Service(), SensorEventListener {
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
                 if (isTargeted) {
-                    x = pxX
-                    y = pxY
+                    x = areaX
+                    y = areaY
                 }
-                
-                // CRITICAL FIX: Ép tràn viền qua Tai thỏ/Camera đục lỗ
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
                 }
-                // CRITICAL FIX: Bỏ qua System Insets (Status Bar & Nav Bar) trên Android 11+
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     fitInsetsTypes = 0
                 }
             }
@@ -678,9 +671,9 @@ class StandardOverlayService : Service(), SensorEventListener {
         overlayViews.clear()
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    //  Sensor → Flutter streaming
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
+    //  Sensor -> Flutter streaming
+    // ======================================================================
 
     private fun broadcastSensorToFlutter(pitch: Double, roll: Double) {
         val now = System.currentTimeMillis()
