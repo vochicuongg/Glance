@@ -1,24 +1,29 @@
-**1. Hiệu ứng Nền Kính mờ (Glassmorphism Backdrop):**
-- Bắt buộc đặt `backgroundColor: Colors.transparent` và `elevation: 0` cho thẻ `Dialog`.
-- Bọc toàn bộ nội dung Dialog bằng widget `BackdropFilter` với `ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0)` để làm mờ sâu khung cảnh phía sau.
+### 1. THIẾT KẾ MÀN HÌNH CHỌN CHẾ ĐỘ (DASHBOARD SCREEN)
+**Ý tưởng:** Trông như 2 chiếc "Thẻ tín dụng VIP" (VIP Cards) đặt dọc hoặc nằm ngang để người dùng quẹt/chọn.
 
-**2. Khung Dialog (Luxury Container):**
-- Sử dụng `Container` làm nội dung chính với nền đen nhám trong suốt (VD: `Color(0xFF121212).withOpacity(0.7)`).
-- Bo góc cực tròn với `BorderRadius.circular(32)`.
-- Viền (Border): Thêm một đường viền siêu mỏng `Border.all(color: Color(0xFFD4AF37).withOpacity(0.3), width: 1)` để tạo cảm giác kim loại sang trọng.
-- Thêm `boxShadow` tỏa sáng nhẹ màu Vàng Gold (Color `0xFFD4AF37` với độ mờ và blurRadius lớn).
-- Căn lề rộng rãi (`padding: EdgeInsets.symmetric(vertical: 40, horizontal: 32)`).
+- **Tiêu đề (Header):** Chữ "Lá Chắn Bảo Mật" (Typography to, w700) với câu phụ đề nhỏ "Chọn cấp độ bảo vệ của bạn".
+- **Thẻ Chế độ Tiêu Chuẩn (Standard Mode Card):**
+  + Sử dụng `Container` bo góc lớn (`circular(24)`).
+  + Nền gradient xám đen sang trọng. Nếu đang được chọn (Active), viền thẻ phát sáng màu Vàng Gold mỏng và có bóng đổ `boxShadow` Glow.
+  + Icon: Hình con mắt hoặc cái rèm che mờ ảo.
+- **Thẻ Chế độ Tối Đa (Max Mode Card):**
+  + Tương tự, nhưng dùng Icon Khiên bảo mật (Shield) cao cấp.
+- **Hiệu ứng chuyển đổi:** Khi người dùng tap vào thẻ nào, thẻ đó sẽ có animation scale nhẹ (phóng to 1.05x) và các thẻ khác bị mờ đi (opacity 0.5).
+- **Nút Kích hoạt (Activation Button):** Nằm ở dưới cùng. Một nút bấm to, rộng tràn viền (padding hai bên), bo góc `circular(16)`. Nền Vàng Gold gradient, chữ Đen đậm "KÍCH HOẠT LÁ CHẮN".
 
-**3. Hoạt ảnh Icon (Animated Premium Icon):**
-- Bọc Icon trong một `TweenAnimationBuilder<double>` (tween từ 0.0 đến 1.0, duration khoảng 600ms, curve: `Curves.elasticOut`) để tạo hiệu ứng "Scale up & Bounce" khi Dialog vừa hiện lên.
-- Icon Design: Tạo một `Container` hình tròn, viền gradient vàng, đổ bóng phát sáng. Bên trong là icon `Icons.verified_user` hoặc `Icons.security_update_good` kích thước lớn (48px), màu Vàng Gold (`Color(0xFFD4AF37)`).
+---
 
-**4. Nghệ thuật chữ (Typography):**
-- Tách câu thông báo thành 2 phần (Sử dụng `Column` với `MainAxisSize.min`).
-- **Tiêu đề (Title):** Hiển thị chữ "Hoàn tất" hoặc "Thành công" - Font chữ đậm (`w700`), cỡ chữ lớn (22-24), màu Trắng tinh khiết, có shadow nhẹ.
-- **Phụ đề (Subtitle):** Câu thông báo động đa ngôn ngữ đã làm ở bước trước (VD: "Thiết lập Chế độ Tối đa thành công!...") - Font chữ thanh mảnh (`w400`), cỡ chữ 15, màu xám bạc (`Colors.grey[400]`), line height (`height: 1.5`) và text align center.
+### 2. THIẾT KẾ MÀN HÌNH CẤP QUYỀN (PERMISSION SCREEN)
+**Ý tưởng:** Không dùng danh sách (ListView) khô khan. Hãy thiết kế nó như một "Bảng điều khiển khoang tàu" (Command Center) với các khối thiết lập (Setup Blocks) tách bạch.
 
-**5. Giữ nguyên Logic cốt lõi:**
-- Không thay đổi logic thời gian delay và cơ chế tự động đóng bằng `Navigator.of(context, rootNavigator: true).pop()`.
+- **Layout tổng thể:** Tương tự Dashboard với nền Đen sâu. 
+- **Tiêu đề:** "Thiết lập Quyền truy cập" / "Hệ thống cần được cấp phép để hoạt động".
+- **Từng Quyền (Permission Tile):**
+  + Mỗi quyền (Overlay, Accessibility, Battery) bọc trong một `Container` Glassmorphism bo góc `circular(20)`. Margin cách nhau rộng rãi (16px).
+  + **Bên trái:** Icon quyền (với viền tròn, nền vàng nhạt/mờ).
+  + **Ở giữa:** Tên quyền (w600) và 1 dòng giải thích ngắn (w400, xám bạc) về lý do cần quyền này để bảo vệ tài sản/dữ liệu.
+  + **Bên phải (Công tắc - Switch/Button):** * XÓA BỎ Switch mặc định của Android. 
+    * Thay bằng một `GestureDetector` có giao diện là một Nút bấm bo tròn nhỏ. Nếu chưa cấp quyền: Nút màu Xám ghi chữ "Cấp quyền". Nếu đã cấp quyền: Nút đổi thành màu Vàng Gold, hiện Icon `check_circle` và chữ "Đã bật".
+- **Animation:** Khi một quyền được bật thành công, thẻ chứa quyền đó sẽ chớp nhẹ màu Vàng Gold.
 
-Vui lòng xuất ra toàn bộ khối mã gọi `showDialog` hoàn chỉnh để tôi cập nhật giao diện.
+Vui lòng cung cấp mã nguồn (Dart) cấu trúc giao diện cho `DashboardScreen` (phần UI build method) và `PermissionScreen` (phần UI build method) dựa trên đặc tả Luxury Minimalist này!

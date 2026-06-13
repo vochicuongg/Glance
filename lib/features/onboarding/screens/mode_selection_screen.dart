@@ -1,29 +1,24 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../permissions/screens/permission_screen.dart';
 
-/// ─────────────────────────────────────────────────────────────────────────────
-/// ModeSelectionScreen — First-Launch Onboarding
-/// ─────────────────────────────────────────────────────────────────────────────
-/// Appears once on first launch. Lets the user choose between two protection
-/// modes before proceeding to the permission flow:
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// ModeSelectionScreen — Luxury Finance VIP Vault Edition
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// Redesigned as two premium "VIP Credit Card" style tiles with deep dark theme,
+/// glassmorphism effects, and Gold accent (#D4AF37).
 ///
-///   • **Standard Mode** — Overlay-only (SYSTEM_ALERT_WINDOW).
-///     Compatible with banking apps; may block touch on covered areas.
-///
-///   • **Maximum Mode** — Accessibility + Overlay.
-///     Full protection with touch pass-through; banking apps may refuse
-///     to run while accessibility is active.
-///
-/// The selection is persisted to SharedPreferences:
-///   - `protection_mode`: `"standard"` or `"maximum"`
-///   - `onboarding_completed`: `true`
-///
-/// After selection, navigates to [PermissionScreen] which adapts its
-/// permission steps based on the chosen mode.
-/// ─────────────────────────────────────────────────────────────────────────────
+/// Design Philosophy:
+///   • Background: Deep black (#0A0A0A) for luxury finance feel
+///   • Cards: Glassmorphism with backdrop blur and subtle gradients
+///   • Active state: Glowing gold border with shadow
+///   • Animations: Smooth scale and opacity transitions
+///   • Button: Wide gold gradient activation button
+/// ═══════════════════════════════════════════════════════════════════════════════
 class ModeSelectionScreen extends StatefulWidget {
   const ModeSelectionScreen({super.key});
 
@@ -33,7 +28,6 @@ class ModeSelectionScreen extends StatefulWidget {
 
 class _ModeSelectionScreenState extends State<ModeSelectionScreen>
     with SingleTickerProviderStateMixin {
-  /// Currently selected mode: null = nothing selected yet.
   String? _selectedMode;
 
   late AnimationController _fadeController;
@@ -44,7 +38,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
     super.initState();
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 800),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
@@ -75,224 +69,277 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final strings = LocaleProvider.stringsOf(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: const Color(0xFF0A0A0A), // Deep black
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnimation,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 48),
-
-                // ── Header ────────────────────────────────────────────────
-                Container(
-                  width: 72,
-                  height: 72,
+          child: Stack(
+            children: [
+              // ── Ambient Background Gradient ──────────────────────────────
+              Positioned(
+                top: -100,
+                right: -100,
+                child: Container(
+                  width: 300,
+                  height: 300,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.amber.withValues(alpha: 0.12),
-                    border: Border.all(
-                      color: Colors.amber.withValues(alpha: 0.3),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.verified_user_rounded,
-                    size: 40,
-                    color: Colors.amber,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  strings.chooseProtectionModeTitle,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // ── Mode Cards ────────────────────────────────────────────
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
-                      children: [
-                        // ── Card 1: Standard Mode ─────────────────────────
-                        _ModeCard(
-                          isSelected: _selectedMode == 'standard',
-                          onTap: () =>
-                              setState(() => _selectedMode = 'standard'),
-                          icon: Icons.verified_user_rounded,
-                          badge: strings.modeRecommendPayment,
-                          title: strings.standardMode,
-                          colorScheme: colorScheme,
-                          isDark: isDark,
-                          theme: theme,
-                          features: [
-                            _FeatureItem(
-                              icon: Icons.check_circle_outline_rounded,
-                              text: strings.modeStandardFeature1,
-                              isPositive: true,
-                            ),
-                            _FeatureItem(
-                              icon: Icons.lock_outline_rounded,
-                              text: strings.modeStandardFeature2,
-                              isPositive: true,
-                            ),
-                            _FeatureItem(
-                              icon: Icons.info_outline_rounded,
-                              text: strings.modeStandardFeature3,
-                              isPositive: false,
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // ── Card 2: Maximum Mode ──────────────────────────
-                        _ModeCard(
-                          isSelected: _selectedMode == 'maximum',
-                          onTap: () =>
-                              setState(() => _selectedMode = 'maximum'),
-                          icon: Icons.security_rounded,
-                          badge: strings.modeMaxProtection,
-                          title: strings.maximumMode,
-                          colorScheme: colorScheme,
-                          isDark: isDark,
-                          theme: theme,
-                          features: [
-                            _FeatureItem(
-                              icon: Icons.check_circle_outline_rounded,
-                              text: strings.modeMaxFeature1,
-                              isPositive: true,
-                            ),
-                            _FeatureItem(
-                              icon: Icons.lock_outline_rounded,
-                              text: strings.modeMaxFeature2,
-                              isPositive: true,
-                            ),
-                            _FeatureItem(
-                              icon: Icons.info_outline_rounded,
-                              text: strings.modeMaxFeature3,
-                              isPositive: false,
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // ── Footer note ───────────────────────────────────
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest
-                                .withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      strings.modeSelectionWarningTitle,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            height: 2,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                    const SizedBox(
-                                      height: 10,
-                                    ), // Khoảng cách giữa các dòng
-                                    Text(
-                                      strings.modeSelectionRecommendStandard.replaceFirst('%s', strings.standardMode),
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            height: 1.5,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      strings.modeSelectionNoDataCollected,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            height: 1.5,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      strings.modeSelectionChangeInSettings,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            height: 1.5,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFFD4AF37).withValues(alpha: 0.08),
+                        Colors.transparent,
                       ],
                     ),
                   ),
                 ),
+              ),
 
-                // ── Confirm Button ────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24, top: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: AnimatedOpacity(
-                      opacity: _selectedMode != null ? 1.0 : 0.4,
-                      duration: const Duration(milliseconds: 250),
-                      child: FilledButton.icon(
-                        onPressed: _selectedMode != null ? _onConfirm : null,
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                        label: Text(
-                          strings.continueButton,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: FilledButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+              // ── Main Content ─────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 56),
+
+                    // ── Header: Shield Icon + Title ──────────────────────────
+                    _buildHeader(strings),
+
+                    SizedBox(height: screenHeight * 0.06),
+
+                    // ── VIP Card Mode Selection ──────────────────────────────
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          children: [
+                            // ── Standard Mode VIP Card ───────────────────────
+                            _LuxuryModeCard(
+                              isSelected: _selectedMode == 'standard',
+                              onTap: () =>
+                                  setState(() => _selectedMode = 'standard'),
+                              icon: Icons.verified_user_rounded,
+                              badge: strings.modeRecommendPayment,
+                              title: strings.standardMode,
+                              features: [
+                                strings.modeStandardFeature1,
+                                strings.modeStandardFeature2,
+                                strings.modeStandardFeature3,
+                              ],
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // ── Maximum Mode VIP Card ────────────────────────
+                            _LuxuryModeCard(
+                              isSelected: _selectedMode == 'maximum',
+                              onTap: () =>
+                                  setState(() => _selectedMode = 'maximum'),
+                              icon: Icons.security_rounded,
+                              badge: strings.modeMaxProtection,
+                              title: strings.maximumMode,
+                              features: [
+                                strings.modeMaxFeature1,
+                                strings.modeMaxFeature2,
+                                strings.modeMaxFeature3,
+                              ],
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // ── Informational Notice ─────────────────────────
+                            _buildInfoNotice(strings),
+
+                            const SizedBox(height: 20),
+                          ],
                         ),
                       ),
                     ),
-                  ),
+
+                    // ── Gold Activation Button ───────────────────────────────
+                    _buildActivationButton(strings),
+
+                    const SizedBox(height: 24),
+                  ],
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(LocalizedStrings strings) {
+    return Column(
+      children: [
+        // Shield Icon with Gold Glow
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                const Color(0xFFD4AF37).withValues(alpha: 0.2),
+                const Color(0xFFD4AF37).withValues(alpha: 0.05),
               ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD4AF37).withValues(alpha: 0.3),
+                blurRadius: 24,
+                spreadRadius: 4,
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.verified_user_rounded,
+            size: 40,
+            color: Color(0xFFD4AF37),
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Title
+        Text(
+          'LÁ CHẮN BẢO MẬT',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+            height: 1.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Subtitle
+        Text(
+          'Chọn cấp độ bảo vệ của bạn',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5),
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoNotice(LocalizedStrings strings) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A).withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.05),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            strings.modeSelectionWarningTitle,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildNoticeLine(
+            strings.modeSelectionRecommendStandard
+                .replaceFirst('%s', strings.standardMode),
+          ),
+          const SizedBox(height: 6),
+          _buildNoticeLine(strings.modeSelectionNoDataCollected),
+          const SizedBox(height: 6),
+          _buildNoticeLine(strings.modeSelectionChangeInSettings),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoticeLine(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            Icons.circle,
+            size: 4,
+            color: Colors.white.withValues(alpha: 0.4),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 11,
+              height: 1.5,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivationButton(LocalizedStrings strings) {
+    final isEnabled = _selectedMode != null;
+
+    return AnimatedOpacity(
+      opacity: isEnabled ? 1.0 : 0.3,
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        width: double.infinity,
+        height: 60,
+        decoration: BoxDecoration(
+          gradient: isEnabled
+              ? const LinearGradient(
+                  colors: [Color(0xFFD4AF37), Color(0xFFC9A961)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isEnabled ? null : const Color(0xFF2A2A2A),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: isEnabled
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFD4AF37).withValues(alpha: 0.4),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isEnabled ? _onConfirm : null,
+            borderRadius: BorderRadius.circular(16),
+            child: Center(
+              child: Text(
+                'KÍCH HOẠT LÁ CHẮN',
+                style: TextStyle(
+                  color: isEnabled ? const Color(0xFF0A0A0A) : Colors.white.withValues(alpha: 0.3),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ),
           ),
         ),
@@ -301,191 +348,203 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-//  _ModeCard — Selectable Protection Mode Card
-// ═══════════════════════════════════════════════════════════════════════════════
-
-class _ModeCard extends StatelessWidget {
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// _LuxuryModeCard — VIP Credit Card Style Mode Selector
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// Features:
+///   • Glassmorphism with backdrop blur
+///   • Gold glowing border when selected
+///   • Scale animation on tap (1.05x)
+///   • Opacity dimming for unselected cards
+///   • Premium dark gradient background
+/// ═══════════════════════════════════════════════════════════════════════════════
+class _LuxuryModeCard extends StatefulWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final IconData icon;
   final String badge;
   final String title;
-  final ColorScheme colorScheme;
-  final bool isDark;
-  final ThemeData theme;
-  final List<_FeatureItem> features;
+  final List<String> features;
 
-  const _ModeCard({
+  const _LuxuryModeCard({
     required this.isSelected,
     required this.onTap,
     required this.icon,
     required this.badge,
     required this.title,
-    required this.colorScheme,
-    required this.isDark,
-    required this.theme,
     required this.features,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final borderColor = isSelected
-        ? colorScheme.primary
-        : colorScheme.outlineVariant;
-    final bgColor = isSelected
-        ? colorScheme.primaryContainer.withValues(alpha: isDark ? 0.25 : 0.15)
-        : colorScheme.surfaceContainerLow;
+  State<_LuxuryModeCard> createState() => _LuxuryModeCardState();
+}
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor, width: isSelected ? 2.0 : 1.0),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header row: icon + badge + radio ──────────────────────
-                Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isSelected
-                            ? colorScheme.primary.withValues(alpha: 0.15)
-                            : colorScheme.surfaceContainerHighest,
+class _LuxuryModeCardState extends State<_LuxuryModeCard> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: widget.isSelected
+            ? (_isPressed ? 1.03 : 1.05)
+            : (_isPressed ? 0.98 : 1.0),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: AnimatedOpacity(
+          opacity: widget.isSelected ? 1.0 : 0.5,
+          duration: const Duration(milliseconds: 300),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: widget.isSelected
+                    ? const Color(0xFFD4AF37)
+                    : Colors.white.withValues(alpha: 0.1),
+                width: widget.isSelected ? 2.0 : 1.0,
+              ),
+              boxShadow: widget.isSelected
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFD4AF37).withValues(alpha: 0.3),
+                        blurRadius: 24,
+                        spreadRadius: 2,
                       ),
-                      child: Icon(
-                        icon,
-                        size: 22,
-                        color: isSelected
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                      ),
+                    ]
+                  : null,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: widget.isSelected
+                          ? [
+                              const Color(0xFF1A1A1A).withValues(alpha: 0.9),
+                              const Color(0xFF2A2A2A).withValues(alpha: 0.8),
+                            ]
+                          : [
+                              const Color(0xFF1A1A1A).withValues(alpha: 0.6),
+                              const Color(0xFF1A1A1A).withValues(alpha: 0.4),
+                            ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Header Row: Icon + Badge ─────────────────────────
+                      Row(
                         children: [
-                          Text(
-                            title,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: colorScheme.onSurface,
+                          // Icon Circle
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: widget.isSelected
+                                  ? const Color(0xFFD4AF37).withValues(alpha: 0.15)
+                                  : Colors.white.withValues(alpha: 0.05),
+                            ),
+                            child: Icon(
+                              widget.icon,
+                              size: 28,
+                              color: widget.isSelected
+                                  ? const Color(0xFFD4AF37)
+                                  : Colors.white.withValues(alpha: 0.4),
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          const Spacer(),
+                          // Badge
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
+                              horizontal: 12,
+                              vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: isSelected
-                                  ? colorScheme.primary.withValues(alpha: 0.12)
-                                  : colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(6),
+                              color: widget.isSelected
+                                  ? const Color(0xFFD4AF37).withValues(alpha: 0.2)
+                                  : Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              badge,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: isSelected
-                                    ? colorScheme.primary
-                                    : colorScheme.onSurfaceVariant,
+                              widget.badge,
+                              style: TextStyle(
+                                color: widget.isSelected
+                                    ? const Color(0xFFD4AF37)
+                                    : Colors.white.withValues(alpha: 0.4),
+                                fontSize: 10,
                                 fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    // Radio indicator
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected
-                              ? colorScheme.primary
-                              : colorScheme.outline,
-                          width: isSelected ? 7 : 2,
+
+                      const SizedBox(height: 20),
+
+                      // ── Mode Title ───────────────────────────────────────
+                      Text(
+                        widget.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                    ),
-                  ],
-                ),
 
-                const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                // ── Feature list ──────────────────────────────────────────
-                ...features.map(
-                  (f) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          f.icon,
-                          size: 16,
-                          color: f.isPositive
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            f.text,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: f.isPositive
-                                  ? colorScheme.onSurface
-                                  : colorScheme.onSurfaceVariant,
-                              height: 1.4,
-                              fontStyle: f.isPositive
-                                  ? FontStyle.normal
-                                  : FontStyle.italic,
+                      // ── Feature List ─────────────────────────────────────
+                      ...widget.features.map((feature) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 16,
+                                    color: widget.isSelected
+                                        ? const Color(0xFFD4AF37)
+                                        : Colors.white.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    feature,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                      fontSize: 12,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
+                          )),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  _FeatureItem — Data class for feature bullet points
-// ═══════════════════════════════════════════════════════════════════════════════
-
-class _FeatureItem {
-  final IconData icon;
-  final String text;
-  final bool isPositive;
-
-  const _FeatureItem({
-    required this.icon,
-    required this.text,
-    required this.isPositive,
-  });
 }

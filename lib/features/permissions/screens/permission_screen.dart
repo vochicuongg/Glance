@@ -1,42 +1,28 @@
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/services/glance_channel_service.dart';
+import '../../../core/widgets/glance_luxury_dialog.dart';
 import '../../dashboard/screens/dashboard_screen.dart';
 import '../../onboarding/screens/mode_selection_screen.dart';
 
-/// ─────────────────────────────────────────────────────────────────────────────
-/// PermissionScreen — Gatekeeper Onboarding (Mode-Aware Sequential Flow)
-/// ─────────────────────────────────────────────────────────────────────────────
-/// Full-screen permission gate that enforces mandatory permissions before
-/// allowing access to the Dashboard.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// PermissionScreen — Command Center Edition (Luxury Finance Style)
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// Redesigned as a premium "Command Center" with glassmorphism permission blocks,
+/// deep dark theme (#0A0A0A), and Gold accent (#D4AF37).
 ///
-/// **Mode-aware behavior** (reads `protection_mode` from SharedPreferences):
-///
-///   • **Maximum mode** (default / `"maximum"`):
-///     Step 1: Accessibility Service  — required for TYPE_ACCESSIBILITY_OVERLAY
-///     Step 2: Overlay (SYSTEM_ALERT_WINDOW) — required for drawing over apps
-///
-///   • **Standard mode** (`"standard"`):
-///     Step 1 (only): Overlay (SYSTEM_ALERT_WINDOW)
-///     Accessibility is NOT required — skipped entirely.
-///
-/// Architecture:
-///   • Uses [WidgetsBindingObserver] to detect when user returns from
-///     system Settings (AppLifecycleState.resumed) and re-checks permissions
-///   • Distinct UI screens rendered via [AnimatedSwitcher]
-///   • Navigation to Dashboard ONLY occurs when ALL required permissions
-///     for the selected mode are granted
-///   • Smooth crossfade + slide animation between steps
-/// ─────────────────────────────────────────────────────────────────────────────
+/// Design Philosophy:
+///   • Background: Deep black for luxury vault feel
+///   • Permission Tiles: Glassmorphism blocks with backdrop blur
+///   • Icons: Gold-accented circular badges
+///   • Buttons: Custom styled (no Android switches) - Gold when granted
+///   • Animations: Flash gold glow when permission granted
+/// ═══════════════════════════════════════════════════════════════════════════════
 class PermissionScreen extends StatefulWidget {
-  /// When true, the back button pops back to the previous screen (e.g. Settings).
-  /// When false (default/onboarding flow), back navigates to ModeSelectionScreen.
   final bool fromSettings;
 
   const PermissionScreen({super.key, this.fromSettings = false});
@@ -47,27 +33,11 @@ class PermissionScreen extends StatefulWidget {
 
 class _PermissionScreenState extends State<PermissionScreen>
     with WidgetsBindingObserver {
-  /// Whether the Accessibility Service is enabled in system Settings.
   bool _hasAccessibility = false;
-
-  /// Whether the SYSTEM_ALERT_WINDOW (Overlay) permission is granted.
   bool _hasOverlay = false;
-
-  /// Whether the battery optimization permission is granted.
   bool _hasBattery = false;
-
-  /// Loading indicator while initial permission check is in progress.
   bool _isLoading = true;
-
-  /// The user's chosen protection mode from onboarding.
-  /// `"standard"` = overlay only; `"maximum"` = accessibility + overlay.
   String _protectionMode = 'maximum';
-
-  /// ══════════════════════════════════════════════════════════════════════════
-  /// Race Condition Guard: Prevents double navigation when both
-  /// AppLifecycleState.resumed and Permission.request() completion
-  /// trigger _navigateForward() simultaneously.
-  /// ══════════════════════════════════════════════════════════════════════════
   bool _isNavigating = false;
 
   @override
@@ -83,11 +53,6 @@ class _PermissionScreenState extends State<PermissionScreen>
     super.dispose();
   }
 
-  /// Re-check permissions when user returns from Settings.
-  ///
-  /// A short delay (300ms) is added before re-querying because some
-  /// OEMs/Android versions need a moment to persist the accessibility
-  /// setting after the user toggles it in system Settings.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -97,22 +62,12 @@ class _PermissionScreenState extends State<PermissionScreen>
     }
   }
 
-  /// Loads the protection mode from SharedPreferences, then checks permissions.
   Future<void> _loadModeAndCheckPermissions() async {
     final prefs = await SharedPreferences.getInstance();
     _protectionMode = prefs.getString('protection_mode') ?? 'maximum';
     await _checkPermissions();
   }
 
-  /// ─────────────────────────────────────────────────────────────────────────
-  /// Core Permission Logic
-  /// ─────────────────────────────────────────────────────────────────────────
-  /// Queries permissions from the native side and updates state.
-  ///
-  /// Navigation rule:
-  ///   • Maximum mode: both accessibility + overlay required
-  ///   • Standard mode: only overlay required
-  /// ─────────────────────────────────────────────────────────────────────────
   Future<void> _checkPermissions() async {
     final results = await Future.wait([
       GlanceChannelService.isAccessibilityEnabled(),
@@ -129,7 +84,6 @@ class _PermissionScreenState extends State<PermissionScreen>
       _isLoading = false;
     });
 
-    // ── Dynamic missing-steps navigation guard ──────────────────────────
     List<String> missing = [];
     if (_protectionMode == 'maximum' && !_hasAccessibility) missing.add('accessibility');
     if (!_hasOverlay) missing.add('overlay');
@@ -140,320 +94,71 @@ class _PermissionScreenState extends State<PermissionScreen>
     }
   }
 
-  /// Navigates forward after all permissions are granted.
-  /// - From settings: just pop back to SettingsScreen
-  /// - From onboarding: replace with DashboardScreen
-  ///
-  /// **Race Condition Protection:**
-  /// This method uses [_isNavigating] flag to prevent double navigation when:
-  ///   1. AppLifecycleState.resumed triggers after system Settings close
-  ///   2. Permission.request() completes asynchronously
-  /// Both events can call this method simultaneously, causing UI duplication.
-  ///
-  /// **Dialog Visibility Fix:**
-  /// A 200ms delay after locking navigation ensures Flutter has enough time
-  /// to render the Permission screen UI after app resume, preventing the
-  /// Dialog from being invisible due to animation conflicts with system dialogs.
   Future<void> _navigateForward() async {
-    // ══════════════════════════════════════════════════════════════════════
-    // CRITICAL: Guard against concurrent navigation attempts
-    // ══════════════════════════════════════════════════════════════════════
-    if (_isNavigating) {
-      // Another navigation is already in progress → abort this attempt
-      return;
-    }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Step 1: Lock the navigation gate
-    // ──────────────────────────────────────────────────────────────────────
+    if (_isNavigating) return;
     _isNavigating = true;
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Step 2: Wait for UI to render after app resume
-    // ──────────────────────────────────────────────────────────────────────
-    // When app returns from Settings, Flutter Engine needs ~1-2 frames to
-    // complete UI rendering. This 200ms delay ensures the Permission screen
-    // context is fully ready before showing Dialog.
     await Future.delayed(const Duration(milliseconds: 200));
-    
-    // Safety check: widget may have been disposed during delay
     if (!mounted) return;
 
     if (widget.fromSettings) {
-      // Coming from Settings → pop back so SettingsScreen can re-check
       Navigator.of(context).pop();
     } else {
-      // ═══════════════════════════════════════════════════════════════════
-      // Step 3: Show success Dialog with dynamic mode name
-      // ═══════════════════════════════════════════════════════════════════
       final strings = LocaleProvider.stringsOf(context);
-      final colorScheme = Theme.of(context).colorScheme;
-      
-      // Translate the current mode name dynamically
       final modeName = _protectionMode == 'standard'
           ? strings.modeStandardName
           : strings.modeMaxName;
-      
-      // Build the success message with the translated mode name
       final successMessage = strings.setupSuccessDynamic.replaceFirst('%s', modeName);
-      
-      // ═══════════════════════════════════════════════════════════════════
-      // Luxury Glassmorphism Success Dialog — Premium Financial/Security UX
-      // ═══════════════════════════════════════════════════════════════════
-      showDialog(
+
+      await GlanceLuxuryDialog.show(
         context: context,
-        barrierDismissible: false, // Prevent dismissal by tapping outside
-        builder: (dialogContext) => Dialog(
-          // ── 1. Glassmorphism Foundation ────────────────────────────────
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(32),
-          ),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
-            child: Container(
-              // ── 2. Luxury Container with Gold Accent Border ─────────────
-              decoration: BoxDecoration(
-                color: const Color(0xFF121212).withOpacity(0.7),
-                borderRadius: BorderRadius.circular(32),
-                border: Border.all(
-                  color: const Color(0xFFD4AF37).withOpacity(0.3),
-                  width: 1,
-                ),
-                boxShadow: [
-                  // Glowing gold shadow for premium feel
-                  BoxShadow(
-                    color: const Color(0xFFD4AF37).withOpacity(0.15),
-                    blurRadius: 40,
-                    spreadRadius: 8,
-                    offset: const Offset(0, 10),
-                  ),
-                  // Deep black shadow for depth
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ── 3. Animated Premium Icon ─────────────────────────────
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.elasticOut,
-                    builder: (context, scale, child) {
-                      return Transform.scale(
-                        scale: scale,
-                        child: child,
-                      );
-                    },
-                    child: Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFD4AF37).withOpacity(0.2),
-                            const Color(0xFFFFF4CC).withOpacity(0.1),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        border: Border.all(
-                          color: const Color(0xFFD4AF37).withOpacity(0.5),
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFD4AF37).withOpacity(0.3),
-                            blurRadius: 24,
-                            spreadRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.verified_user,
-                        color: Color(0xFFD4AF37),
-                        size: 48,
-                      ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // ── 4. Title Typography (Bold & Elegant) ─────────────────
-                  Text(
-                    strings.setupComplete ?? 'Hoàn tất',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 0.5,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black45,
-                          offset: Offset(0, 2),
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // ── 5. Subtitle Typography (Light & Refined) ─────────────
-                  Text(
-                    successMessage,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.grey[400],
-                      height: 1.5,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+        title: strings.setupComplete,
+        subtitle: successMessage,
+        icon: Icons.verified_user,
+        accentColor: const Color(0xFFD4AF37),
+        autoClose: true,
       );
-      
-      // ═══════════════════════════════════════════════════════════════════
-      // Step 4: Wait for user to read the notification (auto-dismiss)
-      // ═══════════════════════════════════════════════════════════════════
-      await Future.delayed(const Duration(milliseconds: 1500));
-      
-      // Safety check: widget may have been disposed during delay
+
       if (!mounted) return;
-      
-      // ═══════════════════════════════════════════════════════════════════
-      // Step 5: Close Dialog safely using root navigator
-      // ═══════════════════════════════════════════════════════════════════
-      Navigator.of(context, rootNavigator: true).pop();
-      
-      // ═══════════════════════════════════════════════════════════════════
-      // Step 6: Navigate to Dashboard
-      // ═══════════════════════════════════════════════════════════════════
-      // Safety check before navigation
-      if (!mounted) return;
-      
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  BUILD — Mode-Aware Sequential UI
-  // ═══════════════════════════════════════════════════════════════════════════
-
   @override
   Widget build(BuildContext context) {
     final strings = LocaleProvider.stringsOf(context);
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
-    // ── Loading state ──────────────────────────────────────────────────────
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: colorScheme.surface,
-        body: const Center(child: CircularProgressIndicator()),
+        backgroundColor: const Color(0xFF0A0A0A),
+        body: const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4AF37)),
+          ),
+        ),
       );
     }
 
-    // ── Dynamic missing-steps list ─────────────────────────────────────────
     List<String> missingSteps = [];
     if (_protectionMode == 'maximum' && !_hasAccessibility) missingSteps.add('accessibility');
     if (!_hasOverlay) missingSteps.add('overlay');
     if (!_hasBattery) missingSteps.add('battery');
 
-    // All permissions granted → show loading while navigating forward
     if (missingSteps.isEmpty) {
       return Scaffold(
-        backgroundColor: colorScheme.surface,
-        body: const Center(child: CircularProgressIndicator()),
+        backgroundColor: const Color(0xFF0A0A0A),
+        body: const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4AF37)),
+          ),
+        ),
       );
     }
 
-    // ── Smart step numbering ───────────────────────────────────────────────
-    int totalSteps = _protectionMode == 'standard' ? 2 : 3;
-    int currentStep = totalSteps - missingSteps.length + 1;
-
-    // ── Render step based on first missing permission ──────────────────────
-    final Widget stepContent;
-    switch (missingSteps.first) {
-      case 'accessibility':
-        stepContent = _PermissionStepView(
-          key: const ValueKey('step_acc'),
-          currentStep: currentStep,
-          totalSteps: totalSteps,
-          icon: Icons.accessibility_new_rounded,
-          title: strings.permAccessibilityTitle,
-          description: strings.permAccessibilityDesc,
-          buttonText: strings.permAccessibilityButton,
-          refreshText: strings.permRefreshStatus,
-          onOpenSettings: () =>
-              GlanceChannelService.openAccessibilitySettings(),
-          onRefresh: _checkPermissions,
-          colorScheme: colorScheme,
-          theme: theme,
-          strings: strings,
-          showRestrictedSettingsHelp: true,
-        );
-        break;
-      case 'overlay':
-        stepContent = _PermissionStepView(
-          key: const ValueKey('step_overlay'),
-          currentStep: currentStep,
-          totalSteps: totalSteps,
-          icon: Icons.layers_rounded,
-          title: strings.permOverlayTitle,
-          description: strings.permOverlayDesc,
-          buttonText: strings.permOverlayButton,
-          refreshText: strings.permRefreshStatus,
-          onOpenSettings: () => GlanceChannelService.openOverlaySettings(),
-          onRefresh: _checkPermissions,
-          colorScheme: colorScheme,
-          theme: theme,
-          strings: strings,
-        );
-        break;
-      case 'battery':
-      default:
-        stepContent = _PermissionStepView(
-          key: const ValueKey('step_battery'),
-          currentStep: currentStep,
-          totalSteps: totalSteps,
-          icon: Icons.battery_alert_rounded,
-          title: strings.batteryPermissionTitle,
-          description: '${strings.batteryPermissionDesc1}\n\n${strings.batteryPermissionDesc2}',
-          buttonText: strings.openBatterySettings,
-          buttonIcon: Icons.battery_saver_rounded,
-          refreshText: strings.permRefreshStatus,
-          onOpenSettings: () async {
-            await Permission.ignoreBatteryOptimizations.request();
-            _checkPermissions();
-          },
-          onRefresh: _checkPermissions,
-          colorScheme: colorScheme,
-          theme: theme,
-          strings: strings,
-        );
-        break;
-    }
-
     return PopScope(
-      // Intercept system back button to use same logic as AppBar back
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
@@ -466,18 +171,16 @@ class _PermissionScreenState extends State<PermissionScreen>
         }
       },
       child: Scaffold(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: const Color(0xFF0A0A0A),
         appBar: AppBar(
-          backgroundColor: colorScheme.surface,
+          backgroundColor: const Color(0xFF0A0A0A),
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () {
               if (widget.fromSettings) {
-                // Coming from Settings → just pop back
                 Navigator.of(context).pop();
               } else {
-                // Onboarding flow → go to ModeSelectionScreen
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
                     builder: (_) => const ModeSelectionScreen(),
@@ -487,39 +190,117 @@ class _PermissionScreenState extends State<PermissionScreen>
             },
             icon: Icon(
               Icons.arrow_back_ios_new_rounded,
-              color: colorScheme.onSurfaceVariant,
+              color: Colors.white.withValues(alpha: 0.6),
               size: 20,
             ),
-            tooltip: widget.fromSettings
-                ? 'Quay lại cài đặt'
-                : 'Quay lại chọn chế độ',
           ),
         ),
         body: SafeArea(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 450),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              // Combine fade + horizontal slide (right-to-left) for a polished transition
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position:
-                      Tween<Offset>(
-                        begin: const Offset(0.15, 0.0),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
+          child: Stack(
+            children: [
+              // ── Ambient Background Gradient ──────────────────────────────
+              Positioned(
+                bottom: -150,
+                left: -150,
+                child: Container(
+                  width: 400,
+                  height: 400,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFFD4AF37).withValues(alpha: 0.08),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Main Content ─────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+
+                    // ── Header ───────────────────────────────────────────────
+                    Text(
+                      'THIẾT LẬP QUYỀN TRUY CẬP',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Hệ thống cần được cấp phép để bảo vệ tài sản của bạn',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    // ── Permission Blocks ────────────────────────────────────
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          children: [
+                            // Accessibility (Maximum mode only)
+                            if (_protectionMode == 'maximum')
+                              _LuxuryPermissionBlock(
+                                icon: Icons.accessibility_new_rounded,
+                                title: strings.permAccessibilityTitle,
+                                description: 'Bảo vệ màn hình với lớp phủ đáng tin cậy',
+                                isGranted: _hasAccessibility,
+                                onTap: () => GlanceChannelService.openAccessibilitySettings(),
+                                onRefresh: _checkPermissions,
+                              ),
+
+                            if (_protectionMode == 'maximum')
+                              const SizedBox(height: 16),
+
+                            // Overlay Permission
+                            _LuxuryPermissionBlock(
+                              icon: Icons.layers_rounded,
+                              title: strings.permOverlayTitle,
+                              description: 'Hiển thị lá chắn trên mọi ứng dụng',
+                              isGranted: _hasOverlay,
+                              onTap: () => GlanceChannelService.openOverlaySettings(),
+                              onRefresh: _checkPermissions,
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Battery Permission
+                            _LuxuryPermissionBlock(
+                              icon: Icons.battery_charging_full_rounded,
+                              title: strings.batteryPermissionTitle,
+                              description: 'Duy trì bảo vệ liên tục ở chế độ nền',
+                              isGranted: _hasBattery,
+                              onTap: () async {
+                                await Permission.ignoreBatteryOptimizations.request();
+                                _checkPermissions();
+                              },
+                              onRefresh: _checkPermissions,
+                            ),
+
+                            const SizedBox(height: 24),
+                          ],
                         ),
                       ),
-                  child: child,
+                    ),
+                  ],
                 ),
-              );
-            },
-            child: stepContent,
+              ),
+            ],
           ),
         ),
       ),
@@ -527,264 +308,238 @@ class _PermissionScreenState extends State<PermissionScreen>
   }
 }
 
-/// ─────────────────────────────────────────────────────────────────────────────
-/// _PermissionStepView — Reusable step layout for each permission request
-/// ─────────────────────────────────────────────────────────────────────────────
-/// Renders a complete full-screen permission request UI with:
-///   • App branding (Glance icon + name)
-///   • Step progress indicator (dot-based)
-///   • Permission-specific icon, title, and description
-///   • "Open Settings" primary action button
-///   • "Already enabled? Continue" secondary refresh button
-///
-/// This is a private stateless widget used exclusively by PermissionScreen.
-/// The [key] parameter (ValueKey) is critical for AnimatedSwitcher to
-/// distinguish between steps and trigger the transition.
-/// ─────────────────────────────────────────────────────────────────────────────
-class _PermissionStepView extends StatelessWidget {
-  final int currentStep;
-  final int totalSteps;
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// _LuxuryPermissionBlock — Command Center Setup Block
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// Features:
+///   • Glassmorphism container with backdrop blur
+///   • Gold icon badge on the left
+///   • Custom button instead of Android switch
+///   • Flash gold animation when granted
+///   • Detailed reason for each permission
+/// ═══════════════════════════════════════════════════════════════════════════════
+class _LuxuryPermissionBlock extends StatefulWidget {
   final IconData icon;
   final String title;
   final String description;
-  final String buttonText;
-  final String refreshText;
-  final VoidCallback onOpenSettings;
+  final bool isGranted;
+  final VoidCallback onTap;
   final VoidCallback onRefresh;
-  final ColorScheme colorScheme;
-  final ThemeData theme;
-  final LocalizedStrings strings;
-  final bool showRestrictedSettingsHelp;
-  final IconData buttonIcon;
 
-  const _PermissionStepView({
-    super.key,
-    required this.currentStep,
-    required this.totalSteps,
+  const _LuxuryPermissionBlock({
     required this.icon,
     required this.title,
     required this.description,
-    required this.buttonText,
-    required this.refreshText,
-    required this.onOpenSettings,
+    required this.isGranted,
+    required this.onTap,
     required this.onRefresh,
-    required this.colorScheme,
-    required this.theme,
-    required this.strings,
-    this.showRestrictedSettingsHelp = false,
-    this.buttonIcon = Icons.settings_rounded,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-      child: Column(
-        children: [
-          const Spacer(flex: 2),
+  State<_LuxuryPermissionBlock> createState() => _LuxuryPermissionBlockState();
+}
 
-          // ── App Icon / Branding ──────────────────────────────────────────
-          Image.asset(
-            'assets/glance-favicon.png',
-            width: 96,
-            height: 96,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Glance',
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
-            ),
-          ),
+class _LuxuryPermissionBlockState extends State<_LuxuryPermissionBlock>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _flashController;
+  late Animation<double> _flashAnimation;
+  bool _wasGranted = false;
 
-          const Spacer(flex: 1),
-
-          // ── Step Indicator ───────────────────────────────────────────────
-          _buildStepIndicator(),
-          const SizedBox(height: 32),
-
-          // ── Permission Icon ─────────────────────────────────────────────
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.amber.withValues(alpha: 0.12),
-              border: Border.all(
-                color: Colors.amber.withValues(alpha: 0.3),
-                width: 1.5,
-              ),
-            ),
-            child: Icon(
-              icon,
-              color: Colors.amber,
-              size: 32,
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Title ───────────────────────────────────────────────────────
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Description ─────────────────────────────────────────────────
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.5,
-            ),
-          ),
-
-          const Spacer(flex: 2),
-
-          // ── Primary Action Button ("Open Settings") ─────────────────────
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: FilledButton.icon(
-              onPressed: onOpenSettings,
-              icon: Icon(buttonIcon, size: 20),
-              label: Text(
-                buttonText,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ),
-
-          if (showRestrictedSettingsHelp) ...[
-            const SizedBox(height: 10),
-            TextButton.icon(
-              onPressed: GlanceChannelService.openAppDetails,
-              icon: const Icon(Icons.admin_panel_settings_rounded, size: 18),
-              label: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(strings.restrictedSettingsHint),
-                  const SizedBox(height: 2),
-                  Text(
-                    strings.restrictedSettingsInstruction,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-              style: TextButton.styleFrom(
-                foregroundColor: colorScheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 12),
-
-          // ── Secondary Refresh Button ("Already enabled? Continue") ──────
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: TextButton.icon(
-              onPressed: onRefresh,
-              icon: Icon(
-                Icons.refresh_rounded,
-                size: 18,
-                color: colorScheme.primary,
-              ),
-              label: Text(
-                refreshText,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: colorScheme.primary,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 32),
-        ],
-      ),
+  @override
+  void initState() {
+    super.initState();
+    _wasGranted = widget.isGranted;
+    _flashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _flashAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _flashController, curve: Curves.easeInOut),
     );
   }
 
-  /// Builds a horizontal step indicator showing progress (e.g., 1/2 or 2/2).
-  ///
-  /// Visual design:
-  ///   • Completed steps: filled primary color with check icon
-  ///   • Current step: elongated pill (wider) in primary color
-  ///   • Future steps: muted outline variant dot
-  Widget _buildStepIndicator() {
-    return Column(
-      children: [
-        // Step dots
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(totalSteps, (index) {
-            final stepNumber = index + 1;
-            final isCompleted = stepNumber < currentStep;
-            final isCurrent = stepNumber == currentStep;
+  @override
+  void didUpdateWidget(_LuxuryPermissionBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_wasGranted && widget.isGranted) {
+      _flashController.forward().then((_) => _flashController.reverse());
+      _wasGranted = true;
+    }
+  }
 
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 350),
-              curve: Curves.easeOutCubic,
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              width: isCurrent ? 32 : 12,
-              height: 12,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                color: isCompleted || isCurrent
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant,
-              ),
-              child: isCompleted
-                  ? Icon(
-                      Icons.check_rounded,
-                      size: 10,
-                      color: colorScheme.onPrimary,
-                    )
-                  : null,
-            );
-          }),
-        ),
-        const SizedBox(height: 8),
-        // Step text label (e.g., "Step 1 of 2")
-        Text(
-          strings.permStepOf
-              .replaceFirst('%d', currentStep.toString())
-              .replaceFirst('%d', totalSteps.toString()),
-          style: TextStyle(
-            fontSize: 13,
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w500,
+  @override
+  void dispose() {
+    _flashController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _flashAnimation,
+      builder: (context, child) {
+        final flashValue = _flashAnimation.value;
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: widget.isGranted
+                  ? Color.lerp(
+                      const Color(0xFFD4AF37),
+                      Colors.white.withValues(alpha: 0.1),
+                      1 - flashValue,
+                    )!
+                  : Colors.white.withValues(alpha: 0.1),
+              width: widget.isGranted ? 2.0 : 1.0,
+            ),
+            boxShadow: widget.isGranted && flashValue > 0
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFD4AF37).withValues(alpha: 0.3 * flashValue),
+                      blurRadius: 20 * flashValue,
+                      spreadRadius: 2 * flashValue,
+                    ),
+                  ]
+                : null,
           ),
-        ),
-      ],
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      const Color(0xFF1A1A1A).withValues(alpha: 0.7),
+                      const Color(0xFF1A1A1A).withValues(alpha: 0.5),
+                    ],
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // ── Icon Badge ───────────────────────────────────────
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: widget.isGranted
+                            ? const Color(0xFFD4AF37).withValues(alpha: 0.15)
+                            : Colors.white.withValues(alpha: 0.05),
+                        border: Border.all(
+                          color: widget.isGranted
+                              ? const Color(0xFFD4AF37).withValues(alpha: 0.3)
+                              : Colors.white.withValues(alpha: 0.1),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Icon(
+                        widget.icon,
+                        size: 28,
+                        color: widget.isGranted
+                            ? const Color(0xFFD4AF37)
+                            : Colors.white.withValues(alpha: 0.4),
+                      ),
+                    ),
+
+                    const SizedBox(width: 16),
+
+                    // ── Text Content ─────────────────────────────────────
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.description,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    // ── Action Button ────────────────────────────────────
+                    if (!widget.isGranted)
+                      GestureDetector(
+                        onTap: widget.onTap,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'Cấp quyền',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      // Granted indicator
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD4AF37).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              color: Color(0xFFD4AF37),
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Đã bật',
+                              style: TextStyle(
+                                color: Color(0xFFD4AF37),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
