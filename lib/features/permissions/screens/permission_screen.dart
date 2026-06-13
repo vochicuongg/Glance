@@ -61,6 +61,13 @@ class _PermissionScreenState extends State<PermissionScreen>
   /// `"standard"` = overlay only; `"maximum"` = accessibility + overlay.
   String _protectionMode = 'maximum';
 
+  /// ══════════════════════════════════════════════════════════════════════════
+  /// Race Condition Guard: Prevents double navigation when both
+  /// AppLifecycleState.resumed and Permission.request() completion
+  /// trigger _navigateForward() simultaneously.
+  /// ══════════════════════════════════════════════════════════════════════════
+  bool _isNavigating = false;
+
   @override
   void initState() {
     super.initState();
@@ -134,7 +141,24 @@ class _PermissionScreenState extends State<PermissionScreen>
   /// Navigates forward after all permissions are granted.
   /// - From settings: just pop back to SettingsScreen
   /// - From onboarding: replace with DashboardScreen
+  ///
+  /// **Race Condition Protection:**
+  /// This method uses [_isNavigating] flag to prevent double navigation when:
+  ///   1. AppLifecycleState.resumed triggers after system Settings close
+  ///   2. Permission.request() completes asynchronously
+  /// Both events can call this method simultaneously, causing UI duplication.
   void _navigateForward() {
+    // ══════════════════════════════════════════════════════════════════════
+    // CRITICAL: Guard against concurrent navigation attempts
+    // ══════════════════════════════════════════════════════════════════════
+    if (_isNavigating) {
+      // Another navigation is already in progress → abort this attempt
+      return;
+    }
+
+    // Lock the navigation gate
+    _isNavigating = true;
+
     if (widget.fromSettings) {
       // Coming from Settings → pop back so SettingsScreen can re-check
       Navigator.of(context).pop();

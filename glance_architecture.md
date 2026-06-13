@@ -1,14 +1,11 @@
-**1. Đối với hàm `openAccessibilitySettings()`:**
-- Giữ nguyên khối `try-catch` và logic Deep-link (`flattenToString`, `fragment_args_key`) hiện có.
-- Bổ sung 2 cờ sau vào intent: `Intent.FLAG_ACTIVITY_NO_HISTORY` và `Intent.FLAG_ACTIVITY_NEW_TASK`.
-- THAY ĐỔI QUAN TRỌNG: Đổi tất cả các lệnh `startActivityForResult(intent, ...)` (trong cả khối try và catch) thành `startActivity(intent)`.
+**1. Tầng Flutter (Dart): Tệp `permission_screen.dart`**
+- Trong class State quản lý màn hình này, hãy khai báo thêm một biến cờ (flag) chống dội ngược, ví dụ: `bool _isNavigating = false;`.
+- Tại vị trí hàm thực thi việc chuyển hướng sang màn hình Dashboard (ví dụ hàm `_navigateForward` hoặc khối lệnh gọi `Navigator.pushReplacement`), hãy bổ sung logic chốt chặn: 
+  + Nếu cờ `_isNavigating` đang là `true`, lập tức `return` (hủy bỏ luồng thực thi phụ).
+  + Nếu là `false`, gán cờ thành `true` (thông qua `setState` nếu cần thiết) trước khi thực hiện lệnh `Navigator`.
 
-**2. Đối với khối lệnh mở Cài đặt Lớp phủ (Overlay Settings) trong MethodChannel:**
-- Tìm vị trí xử lý lệnh `"openOverlaySettings"` (thường gọi `Settings.ACTION_MANAGE_OVERLAY_PERMISSION`).
-- Bổ sung 2 cờ: `Intent.FLAG_ACTIVITY_NO_HISTORY` và `Intent.FLAG_ACTIVITY_NEW_TASK` vào Intent.
-- Đảm bảo lệnh thực thi là `startActivity(intent)` chứ không phải `startActivityForResult`.
+**2. Tầng Native (Android): Tệp `android/app/src/main/AndroidManifest.xml`**
+- Vì nguyên nhân gốc nằm ở Flutter, việc lạm dụng `singleTask` trên `MainActivity` là sai lệch kiến trúc, có thể gây mất state của Flutter Engine khi mở app từ background.
+- Hãy tìm thẻ `<activity>` của `MainActivity` và **ĐỔI LẠI** thuộc tính `android:launchMode` từ `"singleTask"` về lại `"singleTop"` (Chế độ tối ưu mặc định của Flutter).
 
-**3. Xử lý Callback cho Flutter:**
-Vì không còn dùng `startActivityForResult`, hãy đảm bảo ngay sau lệnh `startActivity(...)` của cả 2 quyền trên, bạn gọi `result.success(true)` để MethodChannel phản hồi ngay lập tức cho Flutter. Flutter sẽ tự động quản lý việc kiểm tra lại quyền khi ứng dụng Resume.
-
-Vui lòng xuất ra các đoạn mã hàm đã được refactor hoàn chỉnh để tôi cập nhật vào dự án.
+Vui lòng xuất ra các đoạn mã hàm/cấu hình đã được refactor hoàn chỉnh dựa trên tư duy logic này để tôi cập nhật.

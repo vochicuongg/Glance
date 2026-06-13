@@ -170,15 +170,14 @@ class MainActivity : FlutterActivity() {
                     result.success(Settings.canDrawOverlays(this))
                 }
                 "openOverlaySettings" -> {
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:${packageName}")
-                    ).apply {
-                        // Ensure the Settings activity does not stay in back‑stack
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-                    }
-                    startActivity(intent)
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${packageName}")
+                ).apply {
+                    // Prevent Settings from remaining in back stack
+                    addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+                }
+                startActivity(intent)
                     result.success(true)
                 }
                 "getSettingsFromNative" -> {
@@ -297,7 +296,6 @@ class MainActivity : FlutterActivity() {
                     Uri.parse("package:${packageName}")
                 ).apply {
                     // Prevent Settings activity from remaining in back stack
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
                 }
                 startActivity(intent)
