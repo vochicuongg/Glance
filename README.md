@@ -21,6 +21,31 @@ Với ngôn ngữ thiết kế **"Platinum & Gold"** đẳng cấp, Glance mang 
 
 ---
 
+## 📸 Ảnh Minh Họa (Screenshots)
+
+<p align="center">
+  <img src="assets/Screenshot_1781445790.png" alt="Onboarding - Chào mừng" width="24%">
+  <img src="assets/Screenshot_1781445804.png" alt="Chọn chế độ bảo vệ" width="24%">
+  <img src="assets/Screenshot_1781445815.png" alt="Cấp quyền hệ thống" width="24%">
+  <img src="assets/Screenshot_1781445828.png" alt="Thiết lập quyền" width="24%">
+</p>
+
+<p align="center">
+  <img src="assets/Screenshot_1781445835.png" alt="Dashboard chính" width="24%">
+  <img src="assets/Screenshot_1781445839.png" alt="Kích hoạt lá chắn" width="24%">
+  <img src="assets/Screenshot_1781445851.png" alt="Hiệu chỉnh cảm biến" width="24%">
+  <img src="assets/Screenshot_1781445858.png" alt="Tùy chỉnh độ nhạy" width="24%">
+</p>
+
+<p align="center">
+  <img src="assets/Screenshot_1781445870.png" alt="Chế độ vùng tùy chỉnh" width="24%">
+  <img src="assets/Screenshot_1781445873.png" alt="Vẽ vùng bảo vệ" width="24%">
+  <img src="assets/Screenshot_1781445882.png" alt="Cài đặt nâng cao" width="24%">
+  <img src="assets/Screenshot_1781445901.png" alt="Giới thiệu ứng dụng" width="24%">
+</p>
+
+---
+
 ## ✨ Các Tính Năng Nổi Bật
 
 ### 1. Lá Chắn Góc Nghiêng Thông Minh (Sensor-Driven Overlay)
