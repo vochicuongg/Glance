@@ -1,9 +1,7 @@
 package com.glanceapp.glance
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -16,36 +14,39 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
-import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings
 import android.service.quicksettings.TileService
+import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
 
 /**
- * StandardOverlayService — Regular Foreground Service Privacy Shield (Standard Mode)
+ * MaxOverlayService — Accessibility-based Privacy Shield (Maximum Mode)
  *
- * Extends plain [Service] (NOT AccessibilityService) so banking apps
- * are NOT blocked. Uses TYPE_APPLICATION_OVERLAY which requires only the
- * SYSTEM_ALERT_WINDOW (Overlay) permission.
+ * Extends [AccessibilityService] to obtain TYPE_ACCESSIBILITY_OVERLAY
+ * privilege. This bypasses Android 12+'s "Untrusted Touch Blocker",
+ * allowing alpha up to 242 (95%) with full touch pass-through.
+ *
+ * ⚠️ WARNING: Banking apps may refuse to run while this service is enabled.
  *
  * ┌──────────────────────────────────────────────────────────────────────┐
- * │  DUAL-ENGINE ARCHITECTURE — STANDARD ENGINE                         │
+ * │  DUAL-ENGINE ARCHITECTURE — MAX ENGINE                              │
  * │                                                                    │
- * │  • Uses TYPE_APPLICATION_OVERLAY (untrusted window)                 │
- * │  • Alpha capped at 212 (~83%) — below Maximum mode intensity        │
- * │  • Requires ONLY Overlay permission (no Accessibility)              │
- * │  • Banking apps work normally                                       │
- * │  • Runs as foreground service with notification                     │
- * │  • FLAG_NOT_TOUCHABLE for touch pass-through (≤80% opacity safe)    │
+ * │  • Uses TYPE_ACCESSIBILITY_OVERLAY (trusted window)                 │
+ * │  • Alpha capped at 242 (95%) — pitch black, smooth                 │
+ * │  • Requires Accessibility + Overlay permissions                     │
+ * │  • FLAG_NOT_TOUCHABLE for full touch pass-through                   │
+ * │  • No foreground notification required (system-managed lifecycle)   │
  * └──────────────────────────────────────────────────────────────────────┘
  */
-class StandardOverlayService : Service(), SensorEventListener {
+class MaxOverlayService : AccessibilityService(), SensorEventListener {
 
     companion object {
-        private const val TAG = "StandardOverlayService"
+        private const val TAG = "MaxOverlayService"
 
         @Volatile
         @JvmStatic
@@ -58,7 +59,7 @@ class StandardOverlayService : Service(), SensorEventListener {
         @JvmStatic
         var sensorEventSink: io.flutter.plugin.common.EventChannel.EventSink? = null
 
-        // ── Action constants (shared with MaxOverlayService) ──────────────
+        // ── Action constants (shared across both engines) ─────────────────
         const val ACTION_UPDATE_CONFIG = "com.glanceapp.glance.UPDATE_CONFIG"
         const val ACTION_STOP_SERVICE = "com.glanceapp.glance.STOP_SERVICE"
         const val ACTION_RESUME_SERVICE = "com.glanceapp.glance.RESUME_SERVICE"
@@ -67,9 +68,14 @@ class StandardOverlayService : Service(), SensorEventListener {
         const val ACTION_SET_OVERLAY_MODE = "com.glanceapp.glance.SET_OVERLAY_MODE"
         const val ACTION_SET_TARGETED_AREA = "com.glanceapp.glance.SET_TARGETED_AREA"
         const val ACTION_SET_TOLERANCE = "com.glanceapp.glance.SET_TOLERANCE"
-        const val ACTION_START_SENSOR_ONLY = "com.glanceapp.glance.START_SENSOR_ONLY"
-        const val ACTION_START_STANDARD_MODE = "com.glanceapp.glance.START_STANDARD_MODE"
 
+        // Sensor-only mode: start sensor streaming without activating overlay
+        const val ACTION_START_SENSOR_ONLY = "com.glanceapp.glance.START_SENSOR_ONLY"
+
+        // Self-destruct: revoke accessibility permission by calling disableSelf()
+        const val ACTION_REVOKE_ACCESSIBILITY = "com.glanceapp.glance.REVOKE_ACCESSIBILITY"
+
+        // Dummy constants — kept so MainActivity compiles without changes
         const val ACTION_SET_INTENSITY = "com.glanceapp.glance.SET_INTENSITY"
         const val EXTRA_INTENSITY = "intensity"
         const val EXTRA_NOTIFICATION_TITLE = "notification_title"
@@ -94,18 +100,38 @@ class StandardOverlayService : Service(), SensorEventListener {
         private const val KEY_AREA_WIDTH = "area_width"
         private const val KEY_AREA_HEIGHT = "area_height"
 
-        // ── Notification constants ────────────────────────────────────────
-        private const val NOTIF_CHANNEL_ID = "glance_standard_channel"
-        private const val NOTIF_ID = 9001
+        // ── Max Alpha for Maximum mode ────────────────────────────────────
+        // 230 = ~90% opacity on AMOLED. Allows faint content visibility
+        // beneath the shield while remaining highly effective.
+        private const val MAX_ALPHA = 216
 
-        // ── Max Alpha for Standard mode ───────────────────────────────────
-        // 250 ~= 98% opacity (+15% from previous 83%), substantially
-        // stronger shield while staying below full opaque.
-        private const val MAX_ALPHA = 255
+        /**
+         * Checks whether this AccessibilityService is currently enabled
+         * in the device's Accessibility Settings.
+         */
+        @JvmStatic
+        fun isAccessibilityEnabled(context: Context): Boolean {
+            val expectedComponentName = ComponentName(context, MaxOverlayService::class.java)
+            val enabledServicesSetting = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+
+            val colonSplitter = TextUtils.SimpleStringSplitter(':')
+            colonSplitter.setString(enabledServicesSetting)
+            while (colonSplitter.hasNext()) {
+                val componentNameString = colonSplitter.next()
+                val enabledService = ComponentName.unflattenFromString(componentNameString)
+                if (enabledService != null && enabledService == expectedComponentName) {
+                    return true
+                }
+            }
+            return false
+        }
     }
 
     // ── System services ───────────────────────────────────────────────────
-    private var windowManager: WindowManager? = null
+    private lateinit var windowManager: WindowManager
     private var sensorManager: SensorManager? = null
     private var rotationSensor: Sensor? = null
     private var powerManager: PowerManager? = null
@@ -175,9 +201,6 @@ class StandardOverlayService : Service(), SensorEventListener {
         }
     }
 
-    // ── Flag: receiver registered ─────────────────────────────────────────
-    private var receiverRegistered = false
-
     // ── BroadcastReceiver for runtime config changes ──────────────────────
     private val configReceiver = object : BroadcastReceiver() {
         private fun getSafeFloat(intent: Intent, key: String, defaultVal: Float): Float {
@@ -209,14 +232,14 @@ class StandardOverlayService : Service(), SensorEventListener {
                         isRunning = true
                         rotationSensor?.let {
                             sensorManager?.registerListener(
-                                this@StandardOverlayService, it,
+                                this@MaxOverlayService, it,
                                 SensorManager.SENSOR_DELAY_GAME
                             )
                         }
                         wakeLock?.let { if (it.isHeld) it.release() }
                         wakeLock = powerManager?.newWakeLock(
                             PowerManager.PARTIAL_WAKE_LOCK,
-                            "Glance::StandardShieldWakeLock"
+                            "Glance::MaxShieldWakeLock"
                         )?.apply {
                             acquire(10 * 60 * 1000L)
                         }
@@ -225,19 +248,14 @@ class StandardOverlayService : Service(), SensorEventListener {
                     Log.d(TAG, "CALIBRATE — config reloaded, baseline reset, overlay hidden, isRunning=$isRunning")
                 }
                 ACTION_STOP_SERVICE -> {
-                    // Hibernate: hide overlay, pause sensor, but keep service alive
                     isOverlayShowing = false
                     isRunning = false
                     isCalibrated = false
                     removeOverlayView()
-                    sensorManager?.unregisterListener(this@StandardOverlayService)
+                    sensorManager?.unregisterListener(this@MaxOverlayService)
                     wakeLock?.let { if (it.isHeld) it.release() }
-                    Log.d(TAG, "Shield HIBERNATED — overlay removed, sensor paused, wake lock released")
+                    Log.d(TAG, "Shield HIBERNATED — overlay removed, sensor paused, wake lock released, service still alive")
                     notifyTileStateChanged()
-
-                    // Standard service: actually stop the foreground service
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
                 }
                 ACTION_START_SENSOR_ONLY -> {
                     if (!isRunning) {
@@ -246,7 +264,7 @@ class StandardOverlayService : Service(), SensorEventListener {
                         currentDisplayedAlpha = 0f
                         rotationSensor?.let {
                             sensorManager?.registerListener(
-                                this@StandardOverlayService, it,
+                                this@MaxOverlayService, it,
                                 SensorManager.SENSOR_DELAY_GAME
                             )
                         }
@@ -264,8 +282,9 @@ class StandardOverlayService : Service(), SensorEventListener {
                 }
                 ACTION_RESUME_SERVICE -> {
                     loadSavedConfig()
-                    isCalibrated = false
-                    needsBaselineReset = false
+                    val autoCalibrate = intent?.getBooleanExtra("auto_calibrate", false) ?: false
+                    isCalibrated = autoCalibrate
+                    needsBaselineReset = autoCalibrate
                     removeOverlayView()
                     isOverlayShowing = false
 
@@ -273,14 +292,14 @@ class StandardOverlayService : Service(), SensorEventListener {
                         isRunning = true
                         rotationSensor?.let {
                             sensorManager?.registerListener(
-                                this@StandardOverlayService, it,
+                                this@MaxOverlayService, it,
                                 SensorManager.SENSOR_DELAY_GAME
                             )
                         }
                         wakeLock?.let { if (it.isHeld) it.release() }
                         wakeLock = powerManager?.newWakeLock(
                             PowerManager.PARTIAL_WAKE_LOCK,
-                            "Glance::StandardShieldWakeLock"
+                            "Glance::MaxShieldWakeLock"
                         )?.apply {
                             acquire(10 * 60 * 1000L)
                         }
@@ -296,192 +315,146 @@ class StandardOverlayService : Service(), SensorEventListener {
                     }
                     Log.d(TAG, "Targeted Area / Mode updated dynamically")
                 }
+                ACTION_REVOKE_ACCESSIBILITY -> {
+                    // ── Self-destruct sequence ─────────────────────────────
+                    // 1. Stop overlay & sensor
+                    isOverlayShowing = false
+                    isRunning = false
+                    removeOverlayView()
+                    sensorManager?.unregisterListener(this@MaxOverlayService)
+                    wakeLock?.let { if (it.isHeld) it.release() }
+                    Log.d(TAG, "REVOKE_ACCESSIBILITY — overlay removed, sensor stopped")
+
+                    // 2. Call disableSelf() to revoke Accessibility permission
+                    //    This causes Android to remove the service from the
+                    //    enabled accessibility services list immediately.
+                    try {
+                        disableSelf()
+                        Log.d(TAG, "disableSelf() called — Accessibility permission revoked")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "disableSelf() failed: ${e.message}")
+                    }
+                    notifyTileStateChanged()
+                }
             }
         }
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  Service Lifecycle — Foreground Service
+    //  AccessibilityService Lifecycle
     // ══════════════════════════════════════════════════════════════════════
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.d(TAG, "onServiceConnected — Max Accessibility Service activated")
 
+        isRunning = false
+        isOverlayShowing = false
+
+        serviceInfo = serviceInfo?.apply {
+            eventTypes = AccessibilityEvent.TYPES_ALL_MASK.inv().toInt()
+            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+            flags = AccessibilityServiceInfo.DEFAULT
+            notificationTimeout = 0
+        } ?: serviceInfo
+
+        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+
+        rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+            ?: sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+
+        val filter = IntentFilter().apply {
+            addAction(ACTION_UPDATE_CONFIG)
+            addAction(ACTION_STOP_SERVICE)
+            addAction(ACTION_RESUME_SERVICE)
+            addAction(ACTION_CALIBRATE)
+            addAction(ACTION_SET_SENSITIVITY)
+            addAction(ACTION_SET_OVERLAY_MODE)
+            addAction(ACTION_SET_TARGETED_AREA)
+            addAction(ACTION_SET_TOLERANCE)
+            addAction(ACTION_START_SENSOR_ONLY)
+            addAction(ACTION_REVOKE_ACCESSIBILITY)
+        }
+        registerReceiver(configReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+
+        loadSavedConfig()
+        notifyTileStateChanged()
+
+        Log.d(TAG, "Initialization complete — HIBERNATED, waiting for RESUME broadcast")
+    }
+
+    /**
+     * Handles explicit Intents sent via startService() from GlanceQuickTileService.
+     *
+     * This is a fallback path for when the BroadcastReceiver (configReceiver)
+     * hasn't re-registered yet after a process restart. The tile sends both
+     * a broadcast AND a startService intent — whichever arrives first wins.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action
-        Log.d(TAG, "onStartCommand — action=$action")
+        if (intent != null) {
+            when (intent.action) {
+                ACTION_RESUME_SERVICE -> {
+                    Log.d(TAG, "onStartCommand — ACTION_RESUME_SERVICE received (direct Intent)")
+                    loadSavedConfig()
+                    val autoCalibrate = intent.getBooleanExtra("auto_calibrate", false)
+                    isCalibrated = autoCalibrate
+                    needsBaselineReset = autoCalibrate
+                    removeOverlayView()
+                    isOverlayShowing = false
 
-        // ── STEP 1: ALWAYS promote to foreground IMMEDIATELY ──────────────
-        // This MUST happen within 5 seconds of startForegroundService() call,
-        // regardless of which action triggered the start. Failing to do so
-        // causes ForegroundServiceDidNotStartInTimeException (fatal crash).
-        promoteToForeground(intent)
-
-        // ── STEP 2: Initialize system services (idempotent) ───────────────
-        initSystemServices()
-
-        // ── STEP 3: Register BroadcastReceiver (idempotent) ───────────────
-        registerConfigReceiver()
-
-        // ── STEP 4: Route based on action ─────────────────────────────────
-        when (action) {
-            ACTION_START_STANDARD_MODE, ACTION_RESUME_SERVICE -> {
-                Log.d(TAG, "Starting/Resuming standard shield")
-                loadSavedConfig()
-                isRunning = true
-                val autoCalibrate = intent?.getBooleanExtra("auto_calibrate", false) ?: false
-                isCalibrated = autoCalibrate
-                needsBaselineReset = autoCalibrate
-                currentDisplayedAlpha = 0f
-
-                rotationSensor?.let {
-                    sensorManager?.registerListener(
-                        this, it, SensorManager.SENSOR_DELAY_GAME
-                    )
+                    if (!isRunning) {
+                        isRunning = true
+                        rotationSensor?.let {
+                            sensorManager?.registerListener(
+                                this, it,
+                                SensorManager.SENSOR_DELAY_GAME
+                            )
+                        }
+                        wakeLock?.let { if (it.isHeld) it.release() }
+                        wakeLock = powerManager?.newWakeLock(
+                            PowerManager.PARTIAL_WAKE_LOCK,
+                            "Glance::MaxShieldWakeLock"
+                        )?.apply {
+                            acquire(10 * 60 * 1000L)
+                        }
+                        notifyTileStateChanged()
+                    }
+                    Log.d(TAG, "onStartCommand — RESUME complete, isRunning=$isRunning")
                 }
-
-                wakeLock?.let { if (it.isHeld) it.release() }
-                wakeLock = powerManager?.newWakeLock(
-                    PowerManager.PARTIAL_WAKE_LOCK,
-                    "Glance::StandardWakeLock"
-                )?.apply { acquire(10 * 60 * 1000L) }
-
-                notifyTileStateChanged()
-                Log.d(TAG, "Standard mode initialized — sensor streaming, overlay ready on calibration")
-            }
-            ACTION_STOP_SERVICE -> {
-                // If stop was delivered via startForegroundService intent,
-                // we already promoted above (safe), now just tear down.
-                Log.d(TAG, "STOP action received via onStartCommand — stopping self")
-                isOverlayShowing = false
-                isRunning = false
-                isCalibrated = false
-                removeOverlayView()
-                sensorManager?.unregisterListener(this)
-                wakeLock?.let { if (it.isHeld) it.release() }
-                notifyTileStateChanged()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
-            else -> {
-                Log.d(TAG, "Unknown or null action — service promoted to foreground, awaiting commands")
+                ACTION_STOP_SERVICE -> {
+                    Log.d(TAG, "onStartCommand — ACTION_STOP_SERVICE received (direct Intent)")
+                    isOverlayShowing = false
+                    isRunning = false
+                    isCalibrated = false
+                    removeOverlayView()
+                    sensorManager?.unregisterListener(this)
+                    wakeLock?.let { if (it.isHeld) it.release() }
+                    notifyTileStateChanged()
+                }
             }
         }
         return START_STICKY
     }
 
-    /**
-     * Immediately promotes this service to foreground with a valid Notification.
-     * MUST be called within 5 seconds of startForegroundService() to avoid
-     * ForegroundServiceDidNotStartInTimeException.
-     */
-    private fun promoteToForeground(intent: Intent?) {
-        createNotificationChannel()
-        val notifTitle = intent?.getStringExtra(EXTRA_NOTIFICATION_TITLE)
-            ?: "Glance đang hoạt động"
-        val notifText = intent?.getStringExtra(EXTRA_NOTIFICATION_TEXT)
-            ?: "Chế độ Tiêu chuẩn đang bảo vệ màn hình"
-        val notification = buildForegroundNotification(notifTitle, notifText)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIF_ID,
-                notification,
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(NOTIF_ID, notification)
-        }
-        Log.d(TAG, "promoteToForeground — notification posted")
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // No-op: we only use AccessibilityService for TYPE_ACCESSIBILITY_OVERLAY
     }
 
-    /**
-     * Builds a minimal foreground notification for the Standard service.
-     */
-    private fun buildForegroundNotification(title: String, text: String): Notification {
-        return Notification.Builder(this, NOTIF_CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setSmallIcon(R.drawable.ic_favicon)
-            .setOngoing(true)
-            .build()
-    }
-
-    /**
-     * Initializes WindowManager, SensorManager, PowerManager, and rotation sensor.
-     * Safe to call multiple times — each field is only set if still null.
-     */
-    private fun initSystemServices() {
-        if (windowManager == null) {
-            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        }
-        if (sensorManager == null) {
-            sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        }
-        if (powerManager == null) {
-            powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        }
-        if (rotationSensor == null) {
-            rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
-                ?: sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        }
-    }
-
-    /**
-     * Registers the BroadcastReceiver for runtime config changes.
-     * Safe to call multiple times — only registers once.
-     */
-    private fun registerConfigReceiver() {
-        if (receiverRegistered) return
-        try {
-            val filter = IntentFilter().apply {
-                addAction(ACTION_UPDATE_CONFIG)
-                addAction(ACTION_STOP_SERVICE)
-                addAction(ACTION_RESUME_SERVICE)
-                addAction(ACTION_CALIBRATE)
-                addAction(ACTION_SET_SENSITIVITY)
-                addAction(ACTION_SET_OVERLAY_MODE)
-                addAction(ACTION_SET_TARGETED_AREA)
-                addAction(ACTION_SET_TOLERANCE)
-                addAction(ACTION_START_SENSOR_ONLY)
-            }
-            registerReceiver(configReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            receiverRegistered = true
-        } catch (_: Exception) {
-            // Already registered — ignore
-        }
+    override fun onInterrupt() {
+        Log.d(TAG, "onInterrupt called")
     }
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy — cleaning up")
         isRunning = false
-        if (receiverRegistered) {
-            try { unregisterReceiver(configReceiver) } catch (_: Exception) {}
-            receiverRegistered = false
-        }
+        try { unregisterReceiver(configReceiver) } catch (_: Exception) {}
         sensorManager?.unregisterListener(this)
         removeOverlayView()
         wakeLock?.let { if (it.isHeld) it.release() }
         notifyTileStateChanged()
         super.onDestroy()
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  Notification
-    // ══════════════════════════════════════════════════════════════════════
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIF_CHANNEL_ID,
-                "Glance Protection",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Hiển thị khi Glance đang bảo vệ màn hình"
-                setShowBadge(false)
-            }
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.createNotificationChannel(channel)
-        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -585,12 +558,9 @@ class StandardOverlayService : Service(), SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     // ══════════════════════════════════════════════════════════════════════
-    //  Overlay management — TYPE_APPLICATION_OVERLAY (Standard)
+    //  Overlay management — TYPE_ACCESSIBILITY_OVERLAY
     // ══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Applies alpha value to all overlay views by setting background color.
-     */
     /**
      * Applies alpha value to all overlay views by setting background color.
      */
@@ -604,76 +574,81 @@ class StandardOverlayService : Service(), SensorEventListener {
     }
 
     /**
-     * Creates the overlay using TYPE_APPLICATION_OVERLAY.
-     * Standard View with background color controlled by applyAlphaToOverlay.
+     * Creates the overlay using TYPE_ACCESSIBILITY_OVERLAY (trusted window).
+     * Uses 2 layers (Dual Shield) with standard View background color.
      */
     private fun createOverlayView() {
+
         if (overlayViews.isNotEmpty()) return
-        val wm = windowManager ?: return
 
         try {
-            loadSavedConfig()
-
             val isTargeted = overlayMode == "targeted"
 
+            // CRITICAL FIX: Dữ liệu từ Flutter đã là Physical Pixels. TUYỆT ĐỐI KHÔNG nhân thêm density.
+            val pxX = if (isTargeted) areaX else 0
+            val pxY = if (isTargeted) areaY else 0
             val pxW = if (isTargeted && areaWidth > 0) areaWidth else WindowManager.LayoutParams.MATCH_PARENT
             val pxH = if (isTargeted && areaHeight > 0) areaHeight else WindowManager.LayoutParams.MATCH_PARENT
 
-            val params = WindowManager.LayoutParams(
-                pxW,
-                pxH,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                if (isTargeted) {
-                    x = areaX
-                    y = areaY
+            for (i in 0 until 2) {
+                val params = WindowManager.LayoutParams(
+                    pxW,
+                    pxH,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    if (isTargeted) {
+                        x = pxX
+                        y = pxY
+                    }
+
+                    // CRITICAL FIX: Ép tràn viền qua Tai thỏ/Camera đục lỗ
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    }
+                    // CRITICAL FIX: Bỏ qua System Insets (Status Bar & Nav Bar) trên Android 11+
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        fitInsetsTypes = 0
+                    }
                 }
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                val view = View(this).apply {
+                    setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
+                    alpha = 1f
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    fitInsetsTypes = 0
-                }
+                windowManager.addView(view, params)
+                overlayViews.add(view)
             }
-
-            val view = View(this).apply {
-                setBackgroundColor(android.graphics.Color.argb(0, 0, 0, 0))
-                alpha = 1f
-            }
-            wm.addView(view, params)
-            overlayViews.add(view)
             if (!isAnimationRunning && overlayViews.isNotEmpty()) {
                 overlayViews[0].postOnAnimation(vsyncRunnable)
             }
+            Log.d(TAG, "Max Shield created — 2 layers, TYPE_ACCESSIBILITY_OVERLAY")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to create Standard Shield overlay: ${e.message}")
+            Log.e(TAG, "Failed to create Max Shield overlay: ${e.message}")
             removeOverlayView()
         }
     }
 
     private fun removeOverlayView() {
         isAnimationRunning = false
-        val wm = windowManager ?: return
         overlayViews.forEach { view ->
             view.removeCallbacks(vsyncRunnable)
             try {
-                wm.removeView(view)
+                windowManager.removeView(view)
             } catch (_: Exception) {}
         }
         overlayViews.clear()
     }
 
-    // ======================================================================
-    //  Sensor -> Flutter streaming
-    // ======================================================================
+    // ══════════════════════════════════════════════════════════════════════
+    //  Sensor → Flutter streaming
+    // ══════════════════════════════════════════════════════════════════════
 
     private fun broadcastSensorToFlutter(pitch: Double, roll: Double) {
         val now = System.currentTimeMillis()

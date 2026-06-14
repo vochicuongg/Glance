@@ -260,9 +260,10 @@ class _PermissionScreenState extends State<PermissionScreen>
                         _GlassmorphismPermissionCard(
                           icon: Icons.accessibility_new_rounded,
                           title: strings.permAccessibilityTitle,
-                          description:
-                              'Bảo vệ màn hình với lớp phủ đáng tin cậy',
+                          description: strings.permAccessibilityShortDesc,
                           isGranted: _hasAccessibility,
+                          grantLabel: strings.permButtonGrant,
+                          grantedLabel: strings.permButtonGranted,
                           onTap: () =>
                               GlanceChannelService.openAccessibilitySettings(),
                         ),
@@ -272,8 +273,10 @@ class _PermissionScreenState extends State<PermissionScreen>
                       _GlassmorphismPermissionCard(
                         icon: Icons.layers_rounded,
                         title: strings.permOverlayTitle,
-                        description: 'Hiển thị lá chắn trên mọi ứng dụng',
+                        description: strings.permOverlayShortDesc,
                         isGranted: _hasOverlay,
+                        grantLabel: strings.permButtonGrant,
+                        grantedLabel: strings.permButtonGranted,
                         onTap: () =>
                             GlanceChannelService.openOverlaySettings(),
                       ),
@@ -283,9 +286,10 @@ class _PermissionScreenState extends State<PermissionScreen>
                       _GlassmorphismPermissionCard(
                         icon: Icons.battery_charging_full_rounded,
                         title: strings.batteryPermissionTitle,
-                        description:
-                            'Duy trì bảo vệ liên tục ở chế độ nền',
+                        description: strings.permBatteryShortDesc,
                         isGranted: _hasBattery,
+                        grantLabel: strings.permButtonGrant,
+                        grantedLabel: strings.permButtonGranted,
                         onTap: () async {
                           await Permission.ignoreBatteryOptimizations.request();
                           _checkPermissions();
@@ -354,7 +358,7 @@ class _PermissionScreenState extends State<PermissionScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Cấp phép Hoạt động',
+          strings.permScreenTitle,
           style: TextStyle(
             color: isLight ? const Color(0xFF121212) : Colors.white,
             fontSize: 30,
@@ -365,7 +369,7 @@ class _PermissionScreenState extends State<PermissionScreen>
         ),
         const SizedBox(height: 10),
         Text(
-          'Hệ thống cần được cấp phép để bảo vệ tài sản của bạn',
+          strings.permScreenSubtitle,
           style: TextStyle(
             color: isLight ? const Color(0xFF666666) : Colors.white.withValues(alpha: 0.45),
             fontSize: 14,
@@ -434,7 +438,7 @@ class _PermissionScreenState extends State<PermissionScreen>
                     ),
                   if (isEnabled) const SizedBox(width: 10),
                   Text(
-                    'VÀO ỨNG DỤNG',
+                    strings.permButtonEnterApp,
                     style: TextStyle(
                       color: isEnabled
                           ? _kBackgroundColor
@@ -472,6 +476,8 @@ class _GlassmorphismPermissionCard extends StatefulWidget {
   final String title;
   final String description;
   final bool isGranted;
+  final String grantLabel;
+  final String grantedLabel;
   final VoidCallback onTap;
 
   const _GlassmorphismPermissionCard({
@@ -479,6 +485,8 @@ class _GlassmorphismPermissionCard extends StatefulWidget {
     required this.title,
     required this.description,
     required this.isGranted,
+    required this.grantLabel,
+    required this.grantedLabel,
     required this.onTap,
   });
 
@@ -696,9 +704,9 @@ class _GlassmorphismPermissionCardState
             ),
             color: Colors.transparent,
           ),
-          child: const Text(
-            'CẤP QUYỀN',
-            style: TextStyle(
+          child: Text(
+            widget.grantLabel,
+            style: const TextStyle(
               color: _kGoldAccent,
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -726,18 +734,18 @@ class _GlassmorphismPermissionCardState
             ),
           ],
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            const Icon(
               Icons.check_circle,
               color: Color(0xFF0A0A0A),
               size: 14,
             ),
-            SizedBox(width: 5),
+            const SizedBox(width: 5),
             Text(
-              'ĐÃ BẬT',
-              style: TextStyle(
+              widget.grantedLabel,
+              style: const TextStyle(
                 color: Color(0xFF0A0A0A),
                 fontSize: 12,
                 fontWeight: FontWeight.w700,

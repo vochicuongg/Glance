@@ -197,11 +197,24 @@ class LocalizedStrings {
   final String modeSelectionChangeInSettings;
   final String continueButton;
 
+  // ── Permission Screen — UI Labels ───────────────────────────────────
+  final String permScreenTitle;
+  final String permScreenSubtitle;
+  final String permAccessibilityShortDesc;
+  final String permOverlayShortDesc;
+  final String permBatteryShortDesc;
+  final String permButtonGrant;
+  final String permButtonGranted;
+  final String permButtonEnterApp;
+
   // ── Dynamic Setup Success Message (Permission Screen) ──────────────
   final String modeStandardName;
   final String modeMaxName;
   final String setupSuccessDynamic;
   final String setupComplete;
+
+  // ── Mode Selection CTA Button ───────────────────────────────────────
+  final String btnActivateShield;
 
   const LocalizedStrings({
     required this.protectionActive,
@@ -317,10 +330,19 @@ class LocalizedStrings {
     required this.modeSelectionNoDataCollected,
     required this.modeSelectionChangeInSettings,
     required this.continueButton,
+    required this.permScreenTitle,
+    required this.permScreenSubtitle,
+    required this.permAccessibilityShortDesc,
+    required this.permOverlayShortDesc,
+    required this.permBatteryShortDesc,
+    required this.permButtonGrant,
+    required this.permButtonGranted,
+    required this.permButtonEnterApp,
     required this.modeStandardName,
     required this.modeMaxName,
     required this.setupSuccessDynamic,
     required this.setupComplete,
+    required this.btnActivateShield,
   });
 }
 
@@ -504,11 +526,24 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     modeSelectionChangeInSettings: '⚙️ Easily change protection mode in Settings.',
     continueButton: 'Continue',
 
+    // Permission Screen — UI Labels
+    permScreenTitle: 'Grant Permissions',
+    permScreenSubtitle: 'The system needs permissions to protect your assets',
+    permAccessibilityShortDesc: 'Protect your screen with a trusted overlay',
+    permOverlayShortDesc: 'Display the shield over all applications',
+    permBatteryShortDesc: 'Maintain continuous background protection',
+    permButtonGrant: 'GRANT',
+    permButtonGranted: 'GRANTED',
+    permButtonEnterApp: 'ENTER APP',
+
     // Dynamic Setup Success
     modeStandardName: 'Standard Mode',
     modeMaxName: 'Max Mode',
     setupSuccessDynamic: 'Setup %s successful! Your shield is ready.',
     setupComplete: 'Complete',
+
+    // Mode Selection CTA Button
+    btnActivateShield: 'ACTIVATE SHIELD',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -683,11 +718,24 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     modeSelectionChangeInSettings: '⚙️ Thay đổi chế độ dễ dàng trong mục Cài đặt.',
     continueButton: 'Tiếp tục',
 
+    // Màn hình Cấp quyền — Nhãn giao diện
+    permScreenTitle: 'Cấp phép Hoạt động',
+    permScreenSubtitle: 'Hệ thống cần được cấp phép để bảo vệ tài sản của bạn',
+    permAccessibilityShortDesc: 'Bảo vệ màn hình với lớp phủ đáng tin cậy',
+    permOverlayShortDesc: 'Hiển thị lá chắn trên mọi ứng dụng',
+    permBatteryShortDesc: 'Duy trì bảo vệ liên tục ở chế độ nền',
+    permButtonGrant: 'CẤP QUYỀN',
+    permButtonGranted: 'ĐÃ BẬT',
+    permButtonEnterApp: 'VÀO ỨNG DỤNG',
+
     // Dynamic Setup Success
     modeStandardName: 'Chế độ Tiêu chuẩn',
     modeMaxName: 'Chế độ Tối đa',
     setupSuccessDynamic: 'Thiết lập %s thành công! Lá chắn của bạn đã sẵn sàng.',
     setupComplete: 'Hoàn tất',
+
+    // Nút CTA Chọn chế độ
+    btnActivateShield: 'KÍCH HOẠT LÁ CHẮN',
   ),
 };
 

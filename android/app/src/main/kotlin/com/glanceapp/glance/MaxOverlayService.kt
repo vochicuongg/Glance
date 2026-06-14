@@ -101,9 +101,10 @@ class MaxOverlayService : AccessibilityService(), SensorEventListener {
         private const val KEY_AREA_HEIGHT = "area_height"
 
         // ── Max Alpha for Maximum mode ────────────────────────────────────
-        // 230 = ~90% opacity on AMOLED. Allows faint content visibility
-        // beneath the shield while remaining highly effective.
-        private const val MAX_ALPHA = 216
+        // 203 ~= 80% opacity on AMOLED (-5% from previous 85%).
+        // Slightly lighter to reduce visual heaviness while maintaining
+        // strong privacy protection.
+        private const val MAX_ALPHA = 191
 
         /**
          * Checks whether this AccessibilityService is currently enabled

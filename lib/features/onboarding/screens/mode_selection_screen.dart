@@ -351,7 +351,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
             borderRadius: BorderRadius.circular(16),
             child: Center(
               child: Text(
-                'KÍCH HOẠT LÁ CHẮN',
+                strings.btnActivateShield,
                 style: TextStyle(
                   color: isEnabled
                       ? const Color(0xFF0A0A0A)

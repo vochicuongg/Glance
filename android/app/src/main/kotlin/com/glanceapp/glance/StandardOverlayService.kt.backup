@@ -99,9 +99,9 @@ class StandardOverlayService : Service(), SensorEventListener {
         private const val NOTIF_ID = 9001
 
         // ── Max Alpha for Standard mode ───────────────────────────────────
-        // 250 ~= 98% opacity (+15% from previous 83%), substantially
-        // stronger shield while staying below full opaque.
-        private const val MAX_ALPHA = 255
+        // 212 ~= 83% opacity, stronger than before while staying below
+        // Maximum mode's 216 cap.
+        private const val MAX_ALPHA = 212
     }
 
     // ── System services ───────────────────────────────────────────────────
