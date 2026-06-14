@@ -201,10 +201,11 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
               ),
             ],
           ),
-          child: const Icon(
-            Icons.verified_user_rounded,
-            size: 40,
-            color: Color(0xFFD4AF37),
+          child: Image.asset(
+            'assets/glance-favicon.png',
+            width: 64.0,
+            height: 64.0,
+            fit: BoxFit.contain,
           ),
         ),
         const SizedBox(height: 24),
