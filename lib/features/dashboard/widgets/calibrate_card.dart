@@ -56,7 +56,6 @@ class _AutoPostureToggleState extends State<AutoPostureToggle> {
     final textTheme = Theme.of(context).textTheme;
     final strings = LocaleProvider.stringsOf(context);
     final isEnabled = widget.isServiceActive;
-    final accentColor = AppColors.accent(context);
 
     return Container(
       width: double.infinity,
@@ -68,95 +67,165 @@ class _AutoPostureToggleState extends State<AutoPostureToggle> {
       ),
       child: IgnorePointer(
         ignoring: !isEnabled,
-        child: Opacity(
-          opacity: isEnabled ? 1.0 : 0.4,
-          child: Row(
-            children: [
-              // Left: Icon + Text
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // ─── Left: Icon box ──────────────────────────────────────────────
+            // ─── Left: Icon box ──────────────────────────────────────────────
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isEnabled
+                    ? AppColors.accent(context).withValues(alpha: 0.15)
+                    : AppColors.surface(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: (isEnabled && _autoCalibrate)
+                      ? AppColors.accent(context).withValues(alpha: 0.5)
+                      : AppColors.border(context),
+                  width: (isEnabled && _autoCalibrate) ? 1.0 : 0.5,
                 ),
-                child: Icon(
+                // 🌟 THÊM HIỆU ỨNG HÀO QUANG Ở ĐÂY:
+                boxShadow: [
+                  BoxShadow(
+                    // Nếu Đã Bật: Tỏa hào quang vàng mờ. Nếu Tắt: Trong suốt ẩn đi
+                    color: (isEnabled && _autoCalibrate)
+                        ? AppColors.accent(context).withValues(alpha: 0.35) 
+                        : Colors.transparent,
+                    blurRadius: 12,      // Độ nhòe mềm mại của hào quang
+                    spreadRadius: 1,     // Độ vươn nhẹ ra ngoài viền
+                    offset: Offset.zero, // Cố định ở tâm để tỏa đều 4 hướng
+                  ),
+                ],
+              ),
+              child: TweenAnimationBuilder<Color?>(
+                tween: ColorTween(
+                  begin: const Color(0xFF6A6A6A),
+                  end: isEnabled
+                      ? AppColors.accent(context)
+                      : const Color(0xFF6A6A6A),
+                ),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                builder: (context, color, _) => Icon(
                   Icons.screen_rotation_rounded,
-                  size: 18,
-                  color: accentColor,
+                  size: 20,
+                  color: color,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      strings.autoCalibrationTitle,
-                      style: textTheme.titleMedium?.copyWith(
-                        color: AppColors.textPrimaryC(context),
+            ),
+            const SizedBox(width: 14),
+
+            // ─── Center: Text column ─────────────────────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: AppColors.textTertiaryC(context)
+                            .withValues(alpha: 0.3),
+                        width: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      strings.autoCalibrationSubtitle,
-                      style: textTheme.bodySmall,
-                      maxLines: 3,
-                      softWrap: true,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Right: Toggle button
-              SizedBox(
-                height: 34,
-                child: ElevatedButton(
-                  onPressed:
-                      isEnabled ? () => _toggleAutoCalibrate(!_autoCalibrate) : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _autoCalibrate
-                        ? accentColor.withValues(alpha: 0.15)
-                        : AppColors.surface(context),
-                    foregroundColor: _autoCalibrate
-                        ? accentColor
-                        : AppColors.textTertiaryC(context),
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(
-                        color: _autoCalibrate
-                            ? accentColor.withValues(alpha: 0.4)
-                            : AppColors.border(context),
-                        width: 1,
+                    child: Text(
+                      strings.optional,
+                      style: textTheme.labelSmall?.copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textTertiaryC(context),
+                        fontSize: 10,
                       ),
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _autoCalibrate
-                            ? Icons.check_circle_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        _autoCalibrate ? 'MỞ' : 'TẮT',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 6),
+                  Text(
+                    strings.autoCalibrationTitle,
+                    style: textTheme.titleMedium?.copyWith(
+                      color: isEnabled
+                          ? AppColors.textPrimaryC(context)
+                          : AppColors.textTertiaryC(context),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    strings.autoCalibrationSubtitle,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: isEnabled
+                          ? AppColors.textTertiaryC(context)
+                          : AppColors.textTertiaryC(context).withValues(alpha: 0.5),
+                      height: 1.3,
+                    ),
+                    maxLines: 3,
+                    softWrap: true,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // ─── Right: Follow/Unfollow CTA Button ───────────────────────────
+            InkWell(
+              onTap: isEnabled
+                  ? () => _toggleAutoCalibrate(!_autoCalibrate)
+                  : null,
+              borderRadius: BorderRadius.circular(20),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                // THÊM 2 DÒNG NÀY ĐỂ CHỐT CHẶN CHIỀU RỘNG NÚT:
+                constraints: const BoxConstraints(minWidth: 68), // Chiều rộng tối thiểu luôn cố định
+                alignment: Alignment.center, // Giữ cho chữ luôn căn giữa nút
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12, // Giảm padding ngang một chút từ 16 xuống 12 để tiết kiệm không gian
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: !isEnabled
+                      ? AppColors.surface(context)
+                      : !_autoCalibrate
+                          ? AppColors.accent(context).withValues(alpha: 0.15)
+                          : AppColors.surface(context),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.border(context),
+                    width: 0.5,
+                  ),
+                ),
+                child: TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(
+                    begin: const Color(0xFF6A6A6A),
+                    end: !isEnabled
+                        ? const Color(0xFF6A6A6A)
+                        : !_autoCalibrate
+                            ? AppColors.accent(context)
+                            : Colors.white,
+                  ),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  builder: (context, color, _) => Text(
+                    _autoCalibrate ? strings.off : strings.on,
+                    style: textTheme.labelLarge?.copyWith(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600, 
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -283,8 +352,8 @@ class _CalibrateCardState extends State<CalibrateCard>
                           color: widget.isCalibrated && isEnabled
                               ? AppColors.statusActive
                               : (isEnabled
-                                    ? AppColors.gold
-                                    : AppColors.textTertiaryC(context)),
+                                  ? AppColors.gold
+                                  : AppColors.textTertiaryC(context)),
                           boxShadow: [
                             if (widget.isCalibrated && isEnabled)
                               BoxShadow(
@@ -306,8 +375,8 @@ class _CalibrateCardState extends State<CalibrateCard>
                           color: widget.isCalibrated && isEnabled
                               ? AppColors.statusActive
                               : (isEnabled
-                                    ? AppColors.textSecondaryC(context)
-                                    : AppColors.textTertiaryC(context)),
+                                  ? AppColors.textSecondaryC(context)
+                                  : AppColors.textTertiaryC(context)),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.8,
@@ -385,9 +454,9 @@ class _CalibrateCardState extends State<CalibrateCard>
                           _isCalibrating
                               ? strings.calibrating.toUpperCase()
                               : (isEnabled
-                                    ? strings.calibrateNow.toUpperCase()
-                                    : strings.activateToCalibrate
-                                          .toUpperCase()),
+                                  ? strings.calibrateNow.toUpperCase()
+                                  : strings.activateToCalibrate
+                                      .toUpperCase()),
                           style: textTheme.labelLarge?.copyWith(
                             color: isEnabled
                                 ? AppColors.oledBlack

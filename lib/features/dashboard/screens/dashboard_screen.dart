@@ -879,6 +879,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     required double gammaDeg,
     required bool isActive,
   }) {
+    // Mask data to zero when disconnected
+    final displayBeta = isActive ? beta : 0.0;
+    final displayGamma = isActive ? gamma : 0.0;
+    final displayBetaDeg = isActive ? betaDeg : 0.0;
+    final displayGammaDeg = isActive ? gammaDeg : 0.0;
+
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 300),
       opacity: isActive ? 1.0 : 0.4,
@@ -896,15 +902,15 @@ class _DashboardScreenState extends State<DashboardScreen>
             // Beta bar (Front / Back)
             _buildSingleBar(
               label: strings.sensorFrontBack,
-              value: beta,
-              degrees: betaDeg,
+              value: displayBeta,
+              degrees: displayBetaDeg,
             ),
             const SizedBox(height: 12),
             // Gamma bar (Left / Right)
             _buildSingleBar(
               label: strings.sensorLeftRight,
-              value: gamma,
-              degrees: gammaDeg,
+              value: displayGamma,
+              degrees: displayGammaDeg,
             ),
           ],
         ),
@@ -933,14 +939,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                 letterSpacing: 0.8,
               ),
             ),
-            Text(
-              '${degrees > 0 ? '+' : ''}${degrees.toStringAsFixed(1)}°',
-              style: TextStyle(
-                color: AppColors.gold.withValues(alpha: 0.9),
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'monospace',
-                fontFeatures: const [FontFeature.tabularFigures()],
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: degrees),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (context, animDegrees, _) => Text(
+                '${animDegrees > 0 ? '+' : ''}${animDegrees.toStringAsFixed(1)}°',
+                style: TextStyle(
+                  color: AppColors.gold.withValues(alpha: 0.9),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'monospace',
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ),
           ],
@@ -955,45 +966,51 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final totalWidth = constraints.maxWidth;
-                final leftFraction = value < 0.5 ? value : 0.5;
-                final widthFraction = (value - 0.5).abs();
 
-                final leftPos = leftFraction * totalWidth;
-                final barWidth = widthFraction * totalWidth;
+                return TweenAnimationBuilder<double>(
+                  tween: Tween<double>(end: value),
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, animValue, _) {
+                    final leftFraction = animValue < 0.5 ? animValue : 0.5;
+                    final widthFraction = (animValue - 0.5).abs();
 
-                return Stack(
-                  children: [
-                    // Subtle center divider
-                    Positioned(
-                      left: totalWidth / 2 - 0.5,
-                      top: 0,
-                      bottom: 0,
-                      width: 1,
-                      child: Container(
-                        color: AppColors.border(context).withValues(alpha: 0.5),
-                      ),
-                    ),
-                    // Animated Gold Bar
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 100),
-                      curve: Curves.easeOut,
-                      left: leftPos,
-                      top: 0,
-                      bottom: 0,
-                      width: barWidth,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppColors.gold,
-                              AppColors.gold.withValues(alpha: 0.7),
-                            ],
+                    final leftPos = leftFraction * totalWidth;
+                    final barWidth = widthFraction * totalWidth;
+
+                    return Stack(
+                      children: [
+                        // Subtle center divider
+                        Positioned(
+                          left: totalWidth / 2 - 0.5,
+                          top: 0,
+                          bottom: 0,
+                          width: 1,
+                          child: Container(
+                            color: AppColors.border(context).withValues(alpha: 0.5),
                           ),
-                          borderRadius: BorderRadius.circular(2),
                         ),
-                      ),
-                    ),
-                  ],
+                        // Animated Gold Bar — smooth wake-up transition
+                        Positioned(
+                          left: leftPos,
+                          top: 0,
+                          bottom: 0,
+                          width: barWidth,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.gold,
+                                  AppColors.gold.withValues(alpha: 0.7),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),

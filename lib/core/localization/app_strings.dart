@@ -220,6 +220,9 @@ class LocalizedStrings {
   final String autoCalibrationTitle;
   final String autoCalibrationSubtitle;
   final String autoCalibrationDesc;
+  final String on;
+  final String off;
+  final String optional;
 
   const LocalizedStrings({
     required this.protectionActive,
@@ -351,6 +354,9 @@ class LocalizedStrings {
     required this.autoCalibrationTitle,
     required this.autoCalibrationSubtitle,
     required this.autoCalibrationDesc,
+    required this.on,
+    required this.off,
+    required this.optional,
   });
 }
 
@@ -554,9 +560,12 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     btnActivateShield: 'ACTIVATE SHIELD',
 
     // Auto-Calibration
-    autoCalibrationTitle: 'Auto Posture Adaptation',
-    autoCalibrationSubtitle: 'Automatically adjusts viewing angle when you change posture',
+    autoCalibrationTitle: 'Optimize Viewing Angle',
+    autoCalibrationSubtitle: 'Automatically optimizes the viewing angle based on your device-holding posture',
     autoCalibrationDesc: 'When enabled, the shield will detect your new holding angle and smoothly re-calibrate after 5 seconds of stability.',
+    on: 'Enabled',
+    off: 'Disabled',
+    optional: 'Optional',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -725,10 +734,10 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     modeMaxFeature1: 'Bảo mật cấp độ cao nhất, an tâm tuyệt đối.',
     modeMaxFeature2: 'Yêu cầu quyền: Trợ năng & Hiển thị trên ứng dụng khác.',
     modeMaxFeature3: 'Lưu ý: Một số ứng dụng Ngân hàng có thể từ chối truy cập.',
-    modeSelectionWarningTitle: '⚠️ VUI LÒNG ĐỌC KỸ ƯU VÀ NHƯỢC ĐIỂM CỦA TỪNG CHẾ ĐỘ.',
-    modeSelectionRecommendStandard: '🔒 Khuyên dùng %s, tránh lỗi xung đột thanh toán.',
-    modeSelectionNoDataCollected: '🛡️ Cam kết KHÔNG thu thập bất kỳ dữ liệu cá nhân.',
-    modeSelectionChangeInSettings: '⚙️ Thay đổi chế độ dễ dàng trong mục Cài đặt.',
+    modeSelectionWarningTitle: 'VUI LÒNG ĐỌC KỸ ƯU VÀ NHƯỢC ĐIỂM CỦA TỪNG CHẾ ĐỘ.',
+    modeSelectionRecommendStandard: 'Khuyên dùng %s, tránh lỗi xung đột thanh toán.',
+    modeSelectionNoDataCollected: 'Cam kết KHÔNG thu thập bất kỳ dữ liệu cá nhân.',
+    modeSelectionChangeInSettings: 'Thay đổi chế độ dễ dàng trong mục Cài đặt.',
     continueButton: 'Tiếp tục',
 
     // Màn hình Cấp quyền — Nhãn giao diện
@@ -751,9 +760,12 @@ const Map<AppLocale, LocalizedStrings> _strings = {
     btnActivateShield: 'KÍCH HOẠT LÁ CHẮN',
 
     // Tự động nội suy góc cầm
-    autoCalibrationTitle: 'Tự động thích ứng tư thế',
-    autoCalibrationSubtitle: 'Tự động điều chỉnh góc nhìn khi bạn thay đổi tư thế',
+    autoCalibrationTitle: 'Tối ưu góc nhìn',
+    autoCalibrationSubtitle: 'Tự động tối ưu góc nhìn theo tư thế cầm thiết bị của bạn',
     autoCalibrationDesc: 'Khi bật, lá chắn sẽ nhận diện góc cầm mới và tự động hiệu chỉnh mượt mà sau 5 giây ổn định.',
+    on: 'Kích hoạt',
+    off: 'Vô hiệu hóa',
+    optional: 'Tùy chỉnh',
   ),
 };
 
