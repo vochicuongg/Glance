@@ -727,6 +727,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                     onChangeEnd: _handleToleranceChangeEnd,
                   ),
 
+                  const SizedBox(height: 16),
+
+                  // 4b. Auto Posture Adaptation Toggle (below Tolerance, above Calibrate)
+                  AutoPostureToggle(isServiceActive: _isServiceActive),
+
                   const SizedBox(height: 12),
 
                   // ── UX Warning: Clickjacking Protection notice ──────────
@@ -964,7 +969,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                       top: 0,
                       bottom: 0,
                       width: 1,
-                      child: Container(color: AppColors.border(context).withValues(alpha: 0.5)),
+                      child: Container(
+                        color: AppColors.border(context).withValues(alpha: 0.5),
+                      ),
                     ),
                     // Animated Gold Bar
                     AnimatedPositioned(
@@ -995,5 +1002,4 @@ class _DashboardScreenState extends State<DashboardScreen>
       ],
     );
   }
-
 }

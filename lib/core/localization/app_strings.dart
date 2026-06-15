@@ -216,6 +216,11 @@ class LocalizedStrings {
   // ── Mode Selection CTA Button ───────────────────────────────────────
   final String btnActivateShield;
 
+  // ── Auto-Calibration (Tự động nội suy góc cầm) ─────────────────────
+  final String autoCalibrationTitle;
+  final String autoCalibrationSubtitle;
+  final String autoCalibrationDesc;
+
   const LocalizedStrings({
     required this.protectionActive,
     required this.protectionDisabled,
@@ -343,6 +348,9 @@ class LocalizedStrings {
     required this.setupSuccessDynamic,
     required this.setupComplete,
     required this.btnActivateShield,
+    required this.autoCalibrationTitle,
+    required this.autoCalibrationSubtitle,
+    required this.autoCalibrationDesc,
   });
 }
 
@@ -544,6 +552,11 @@ const Map<AppLocale, LocalizedStrings> _strings = {
 
     // Mode Selection CTA Button
     btnActivateShield: 'ACTIVATE SHIELD',
+
+    // Auto-Calibration
+    autoCalibrationTitle: 'Auto Posture Adaptation',
+    autoCalibrationSubtitle: 'Automatically adjusts viewing angle when you change posture',
+    autoCalibrationDesc: 'When enabled, the shield will detect your new holding angle and smoothly re-calibrate after 5 seconds of stability.',
   ),
 
   // ══════════════════════════════════════════════════════════════════════
@@ -736,6 +749,11 @@ const Map<AppLocale, LocalizedStrings> _strings = {
 
     // Nút CTA Chọn chế độ
     btnActivateShield: 'KÍCH HOẠT LÁ CHẮN',
+
+    // Tự động nội suy góc cầm
+    autoCalibrationTitle: 'Tự động thích ứng tư thế',
+    autoCalibrationSubtitle: 'Tự động điều chỉnh góc nhìn khi bạn thay đổi tư thế',
+    autoCalibrationDesc: 'Khi bật, lá chắn sẽ nhận diện góc cầm mới và tự động hiệu chỉnh mượt mà sau 5 giây ổn định.',
   ),
 };
 

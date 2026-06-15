@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
@@ -8,13 +7,13 @@ import 'app_colors.dart';
 /// Glance — App Theme
 /// ─────────────────────────────────────────────────────────────────────────────
 /// Dual-mode theme system: OLED Dark + Elegant Light.
-/// Typography uses Inter via Google Fonts — clean, minimalist, highly readable.
+/// Typography uses default system fonts for native, consistent rendering.
 /// Gold accents are preserved in both modes for brand consistency.
 /// ─────────────────────────────────────────────────────────────────────────────
 abstract final class AppTheme {
   /// The OLED dark theme for the app (default).
   static ThemeData get darkTheme {
-    final baseTextTheme = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
+    final baseTextTheme = ThemeData.dark().textTheme;
 
     return ThemeData(
       useMaterial3: true,
@@ -148,8 +147,7 @@ abstract final class AppTheme {
   /// Light Theme — Elegant white/grey with Gold accents
   /// ─────────────────────────────────────────────────────────────────────────
   static ThemeData get lightTheme {
-    final baseTextTheme =
-        GoogleFonts.interTextTheme(ThemeData.light().textTheme);
+    final baseTextTheme = ThemeData.light().textTheme;
 
     return ThemeData(
       useMaterial3: true,

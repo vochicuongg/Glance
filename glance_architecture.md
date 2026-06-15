@@ -1,21 +1,18 @@
-**NHIỆM VỤ CỦA BẠN:**
-Tuyệt đối tự suy luận mã nguồn Flutter (Dart). Hãy thực hiện 2 bước cấu hình sau:
+**IMPLEMENTATION RULES (Phải tuân thủ tuyệt đối):**
 
-**1. Hướng dẫn khai báo tệp `pubspec.yaml`:**
-- Hãy viết một đoạn hướng dẫn ngắn (kèm code snippet) yêu cầu người dùng mở tệp `pubspec.yaml` và thêm đường dẫn ảnh vào phần `assets:`.
-- Cấu hình chuẩn: `- assets/glance-favicon.png` (Hoặc `- assets/` để tự động nhận diện toàn bộ thư mục).
+**BƯỚC 1: Truy vết Widget gốc (Find the Shared Wrapper)**
+- Hãy dùng khả năng đọc code của bạn, xem lại 2 thẻ "Độ nhạy" và "Vùng chấp nhận lệch" đang được bọc bởi Widget gốc nào. (Đó có thể là một custom class như `DashboardCard`, `SettingCardItem`, hoặc một hàm build chung nào đó do User tự viết).
+- TÌM RA ĐƯỢC CÁI KHUÔN ĐÓ LÀ BẮT BUỘC.
 
-**2. Refactor Widget Header (`mode_selection_screen.dart`):**
-- Tìm đến khối UI hiển thị Icon khiên tỏa sáng nằm ngay phía trên dòng chữ "GLANCE".
-- **XÓA BỎ** Widget `Icon(Icons.shield...)` (hoặc icon tương đương đang dùng).
-- **THAY THẾ BẰNG** Widget `Image.asset`:
-  ```dart
-  Image.asset(
-    'assets/glance-favicon.png',
-    width: 64.0, // Hoặc kích thước phù hợp với thiết kế (ví dụ 56, 64, 72)
-    height: 64.0,
-    fit: BoxFit.contain,
-  )
-GIỮ NGUYÊN Widget bọc bên ngoài (ví dụ Container có cấu hình boxShadow màu Vàng Gold Color(0xFFD4AF37)) để cái Logo mới lắp vào vẫn thừa hưởng được hiệu ứng vầng hào quang lấp lánh như cũ.
+**BƯỚC 2: Tái cấu trúc AutoPostureToggle (Reuse, Don't Rebuild)**
+- XÓA BỎ hoàn toàn cái `Container` thủ công rườm rà hiện tại của `AutoPostureToggle`.
+- BỌC nội dung của `AutoPostureToggle` vào CHÍNH XÁC cái Custom Widget/Wrapper mà bạn vừa tìm được ở Bước 1. 
+- Mọi thông số về padding, margin, màu nền (background color), viền (border) phải để cho Wrapper đó tự lo (nó sẽ tự ăn theo Theme sáng/tối của app). Tuyệt đối không hardcode bất kỳ màu nào.
 
-Vui lòng xuất ra hướng dẫn pubspec.yaml và đoạn mã UI của phần Header đã được thay thế Logo để tôi cập nhật dự án.
+**BƯỚC 3: Xử lý trạng thái Disabled (Opacity Overlay)**
+- Để xử lý việc tắt/mở khi `isServiceActive == false`:
+  - Bọc TOÀN BỘ cái thẻ (sau khi đã dùng đúng Wrapper) vào trong `IgnorePointer(ignoring: !isServiceActive)`.
+  - Tiếp tục bọc nó trong `Opacity(opacity: isServiceActive ? 1.0 : 0.4)`.
+- Không được dùng hàm đổi màu text hay đổi màu icon để biểu diễn trạng thái Disabled nữa, cứ để thẻ hiển thị màu sắc bình thường, `Opacity` sẽ lo việc làm mờ.
+
+Hãy dùng tính năng Thinking để phân tích cây Widget, tìm ra cái khuôn dùng chung, ráp thẻ thứ 3 vào khuôn đó và báo cáo lại chính xác tên Widget dùng chung mà bạn đã tìm thấy.

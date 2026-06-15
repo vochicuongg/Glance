@@ -1,10 +1,170 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/theme/app_colors.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
-/// CalibrateCard (Refactored to a high-fidelity Bottom CTA Widget)
+/// AutoPostureToggle — standalone self-contained toggle card
+/// ─────────────────────────────────────────────────────────────────────────────
+/// "Tự động thích ứng tư thế" (Auto Posture Adaptation) toggle.
+/// Reads/writes `auto_calibrate` from SharedPreferences independently.
+/// Designed to be placed in the dashboard body below the Tolerance slider.
+/// ─────────────────────────────────────────────────────────────────────────────
+class AutoPostureToggle extends StatefulWidget {
+  final bool isServiceActive;
+
+  const AutoPostureToggle({super.key, required this.isServiceActive});
+
+  @override
+  State<AutoPostureToggle> createState() => _AutoPostureToggleState();
+}
+
+class _AutoPostureToggleState extends State<AutoPostureToggle> {
+  static const _prefKey = 'auto_calibrate';
+
+  bool _autoCalibrate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAutoCalibrate();
+  }
+
+  Future<void> _loadAutoCalibrate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedValue = prefs.getBool(_prefKey);
+    if (savedValue == null) {
+      await prefs.setBool(_prefKey, false);
+    }
+    if (!mounted) return;
+    setState(() {
+      _autoCalibrate = savedValue ?? false;
+    });
+  }
+
+  Future<void> _toggleAutoCalibrate(bool value) async {
+    if (!widget.isServiceActive) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefKey, value);
+    if (!mounted) return;
+    setState(() => _autoCalibrate = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final strings = LocaleProvider.stringsOf(context);
+    final isEnabled = widget.isServiceActive;
+    final accentColor = AppColors.accent(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border(context), width: 0.5),
+      ),
+      child: IgnorePointer(
+        ignoring: !isEnabled,
+        child: Opacity(
+          opacity: isEnabled ? 1.0 : 0.4,
+          child: Row(
+            children: [
+              // Left: Icon + Text
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.screen_rotation_rounded,
+                  size: 18,
+                  color: accentColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      strings.autoCalibrationTitle,
+                      style: textTheme.titleMedium?.copyWith(
+                        color: AppColors.textPrimaryC(context),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      strings.autoCalibrationSubtitle,
+                      style: textTheme.bodySmall,
+                      maxLines: 3,
+                      softWrap: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Right: Toggle button
+              SizedBox(
+                height: 34,
+                child: ElevatedButton(
+                  onPressed:
+                      isEnabled ? () => _toggleAutoCalibrate(!_autoCalibrate) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _autoCalibrate
+                        ? accentColor.withValues(alpha: 0.15)
+                        : AppColors.surface(context),
+                    foregroundColor: _autoCalibrate
+                        ? accentColor
+                        : AppColors.textTertiaryC(context),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: _autoCalibrate
+                            ? accentColor.withValues(alpha: 0.4)
+                            : AppColors.border(context),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _autoCalibrate
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        _autoCalibrate ? 'MỞ' : 'TẮT',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// CalibrateCard (Bottom CTA Widget)
 /// ─────────────────────────────────────────────────────────────────────────────
 /// An ergonomic, premium Call to Action button designed for single-handed
 /// thumb usage. Placed at the bottom of the screen (typically in the Scaffold's
@@ -65,7 +225,10 @@ class _CalibrateCardState extends State<CalibrateCard>
 
     if (mounted) {
       _spinController.stop();
-      _spinController.animateTo(0.0, duration: const Duration(milliseconds: 300));
+      _spinController.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 300),
+      );
       setState(() => _isCalibrating = false);
     }
   }
@@ -119,11 +282,15 @@ class _CalibrateCardState extends State<CalibrateCard>
                           shape: BoxShape.circle,
                           color: widget.isCalibrated && isEnabled
                               ? AppColors.statusActive
-                              : (isEnabled ? AppColors.gold : AppColors.textTertiaryC(context)),
+                              : (isEnabled
+                                    ? AppColors.gold
+                                    : AppColors.textTertiaryC(context)),
                           boxShadow: [
                             if (widget.isCalibrated && isEnabled)
                               BoxShadow(
-                                color: AppColors.statusActive.withValues(alpha: 0.6),
+                                color: AppColors.statusActive.withValues(
+                                  alpha: 0.6,
+                                ),
                                 blurRadius: 6,
                                 spreadRadius: 1,
                               ),
@@ -138,7 +305,9 @@ class _CalibrateCardState extends State<CalibrateCard>
                         style: TextStyle(
                           color: widget.isCalibrated && isEnabled
                               ? AppColors.statusActive
-                              : (isEnabled ? AppColors.textSecondaryC(context) : AppColors.textTertiaryC(context)),
+                              : (isEnabled
+                                    ? AppColors.textSecondaryC(context)
+                                    : AppColors.textTertiaryC(context)),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.8,
@@ -173,10 +342,7 @@ class _CalibrateCardState extends State<CalibrateCard>
                 color: isEnabled ? null : AppColors.cardSurface(context),
                 border: isEnabled
                     ? null
-                    : Border.all(
-                        color: AppColors.border(context),
-                        width: 1.0,
-                      ),
+                    : Border.all(color: AppColors.border(context), width: 1.0),
                 boxShadow: [
                   if (isEnabled) ...[
                     BoxShadow(
@@ -219,8 +385,9 @@ class _CalibrateCardState extends State<CalibrateCard>
                           _isCalibrating
                               ? strings.calibrating.toUpperCase()
                               : (isEnabled
-                                  ? strings.calibrateNow.toUpperCase()
-                                  : strings.activateToCalibrate.toUpperCase()),
+                                    ? strings.calibrateNow.toUpperCase()
+                                    : strings.activateToCalibrate
+                                          .toUpperCase()),
                           style: textTheme.labelLarge?.copyWith(
                             color: isEnabled
                                 ? AppColors.oledBlack
