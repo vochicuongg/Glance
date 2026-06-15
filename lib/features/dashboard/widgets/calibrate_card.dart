@@ -160,9 +160,9 @@ class _AutoPostureToggleState extends State<AutoPostureToggle> {
                   Text(
                     strings.autoCalibrationSubtitle,
                     style: textTheme.bodySmall?.copyWith(
-                      color: isEnabled
-                          ? AppColors.textTertiaryC(context)
-                          : AppColors.textTertiaryC(context).withValues(alpha: 0.5),
+                      // Đã XÓA dòng ép color ở đây.
+                      // Để Flutter tự động thừa kế màu bodySmall chuẩn của AppTheme
+                      // y hệt như file tolerance_slider_card.dart đang làm!
                       height: 1.3,
                     ),
                     maxLines: 3,
